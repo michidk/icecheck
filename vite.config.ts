@@ -1,4 +1,5 @@
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import { nitro } from 'nitro/vite'
 import viteReact from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
@@ -35,6 +36,10 @@ export default defineConfig({
       spa: {
         enabled: true,
       },
+    }),
+    nitro({
+      serverDir: 'server',
+      features: { websocket: true },
     }),
     viteReact(),
   ],

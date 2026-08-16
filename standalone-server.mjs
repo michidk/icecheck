@@ -27,7 +27,7 @@ app.use((request, response, next) => {
 
 diagnostics.attach(server)
 server.listen(port, host, () => {
-  console.log(`WebRTC tester is ready at http://${host}:${port}`)
+  console.log(`WebRTC tester is ready at http://${host}:${port}${basePath || '/'}`)
 })
 
 async function shutdown() {

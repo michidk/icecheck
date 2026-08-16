@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.output/
 .vite/
 .tanstack/
 .playwright/
@@ -7,4 +8,5 @@ coverage/
 .env
 .env.*
 !.env.example
+.vercel/
 *.log

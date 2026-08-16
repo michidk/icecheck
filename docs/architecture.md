@@ -26,7 +26,7 @@ The assisted and manual routes import the reusable `src/modules/icecheck` featur
 
 The controller is named `icecheck-client.client.js` and is loaded through `createClientOnlyFn()`. This keeps `window`, canvas, WebSocket, and WebRTC code out of the server bundle used to prerender the SPA shell.
 
-During development, Vite owns the HTTP server. A small Vite plugin attaches the shared diagnostic runtime to that server. In production, [`server.mjs`](../server.mjs) serves the generated SPA shell and attaches the same runtime. Both environments therefore expose identical `/config`, `/health`, and `/signal` behavior.
+During development, Vite owns the HTTP server and a small plugin attaches the direct Node diagnostic runtime. Production builds use Nitro: HTTP routes live under `server/routes`, and the WebSocket route adapts the same transport-neutral signaling broker to CrossWS. The integration suite exercises the generated Nitro server. [`standalone-server.mjs`](../standalone-server.mjs) remains an optional direct Node adapter for `npm run start:legacy`.
 
 ## Components
 
@@ -188,8 +188,10 @@ Manual-only mode does not require WebSocket forwarding, but it still requires bo
 ## Source map
 
 - [`vite.config.ts`](../vite.config.ts): TanStack Start SPA configuration and development runtime attachment
-- [`server.mjs`](../server.mjs): production static SPA host
-- [`server/diagnostic-runtime.mjs`](../server/diagnostic-runtime.mjs): ICE configuration, rooms, and WebSocket forwarding shared by dev and production
+- [`standalone-server.mjs`](../standalone-server.mjs): direct Node static SPA host
+- [`server/diagnostic-runtime.mjs`](../server/diagnostic-runtime.mjs): direct Node HTTP and WebSocket adapter
+- [`server/signaling-broker.mjs`](../server/signaling-broker.mjs): transport-neutral rooms and signaling protocol
+- [`server/routes`](../server/routes): Nitro production HTTP and WebSocket routes
 - [`src/router.tsx`](../src/router.tsx): TanStack Router factory
 - [`src/routes`](../src/routes): URL and document-shell ownership
 - [`src/routes/(home)/-components/home-page.tsx`](<../src/routes/(home)/-components/home-page.tsx>): mode chooser used only by the root route

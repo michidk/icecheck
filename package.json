@@ -16,18 +16,20 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && tsc --noEmit",
-    "start": "NODE_ENV=production node server.mjs",
+    "start": "node .output/server/index.mjs",
+    "start:legacy": "NODE_ENV=production node standalone-server.mjs",
     "pretest": "npm run build",
     "test": "node --test",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
-    "node": ">=20"
+    "node": "24.x"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.170.29",
     "@tanstack/react-start": "^1.168.46",
     "express": "^5.1.0",
+    "nitro": "^3.0.260610-beta",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "ws": "^8.18.3"

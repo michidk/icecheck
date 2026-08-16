@@ -82,12 +82,12 @@ before(async () => {
   const port = await getAvailablePort();
   baseUrl = `http://127.0.0.1:${port}`;
   signalUrl = `ws://127.0.0.1:${port}/signal`;
-  app = spawn(process.execPath, ['server.mjs'], {
+  app = spawn(process.execPath, ['.output/server/index.mjs'], {
     cwd: new URL('..', import.meta.url),
     env: { ...process.env, NODE_ENV: 'production', PORT: String(port) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  await waitForOutput(app.stdout, 'WebRTC tester is ready');
+  await waitForOutput(app.stdout, 'Listening on:');
 });
 
 after(() => app?.kill('SIGTERM'));
@@ -121,8 +121,8 @@ test('serves the diagnostic UI and ICE strategy configuration', async () => {
     [homeResponse.status, sessionResponse.status, manualResponse.status, roomResponse.status],
     [200, 200, 200, 200],
   );
-  assert.match(page, /<title>Choose a WebRTC diagnostic · icecheck<\/title>/);
-  assert.match(page, /Loading icecheck/);
+  assert.match(page, /<title>Join WebRTC diagnostic room · icecheck<\/title>/);
+  assert.match(page, /Trace a native WebRTC connection/);
   assert.match(home, /Find where a peer connection fails/);
   assert.match(home, /connectivity diagnostic—not a bandwidth benchmark/);
   assert.match(home, /Start assisted test/);

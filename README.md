@@ -27,14 +27,24 @@ The Vite development server defaults to `http://localhost:4173`. To test across 
 PORT=4173 HOST=0.0.0.0 npm run dev
 ```
 
-To exercise the production SPA server:
+To exercise the Nitro production server:
 
 ```sh
 npm run build
 PORT=4173 HOST=0.0.0.0 npm start
 ```
 
-The production Node process serves `dist/client/_shell.html`, static assets, `/config`, `/health`, and the `/signal` WebSocket on one origin.
+The Nitro production output serves the SPA, `/config`, `/health`, and the `/signal` WebSocket on one origin. `npm run start:legacy` remains available to exercise the original Node server directly.
+
+## Deploy to Vercel
+
+TanStack Start is built through Nitro using the Vercel preset selected by the deployment environment:
+
+```sh
+npx vercel@latest --prod
+```
+
+Vercel WebSockets are currently Public Beta. A connection remains pinned to one Function instance until that Function reaches its maximum duration. The assisted-room broker keeps room membership in memory, so a small deployment works without another service, but reliable horizontal scaling requires shared room state and cross-instance pub/sub. Manual signaling does not use a WebSocket and is unaffected by that constraint.
 
 For phone testing, open the tool through an HTTPS or LAN-reachable origin before creating a room. A URL containing `localhost` refers to the device opening it, so it cannot be copied from a computer to a phone.
 
@@ -112,7 +122,7 @@ See [Architecture and diagnostics](docs/architecture.md) for the complete flow a
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `4173` in dev; `3100` in production | HTTP and WebSocket port |
+| `PORT` | `4173` in dev; `3000` in Nitro; `3100` in legacy mode | HTTP and WebSocket port |
 | `HOST` | `0.0.0.0` | Network interface to bind |
 | `BASE_PATH` | _(empty)_ | Optional URL prefix, such as `/tools/icecheck` |
 | `ALLOWED_HOSTS` | _(empty)_ | Comma-separated hostnames accepted by the Vite development server |
@@ -126,9 +136,11 @@ The tester is intentionally STUN-only. Connections that require a media relay wi
 tester/
 ├── vite.config.ts             TanStack Start SPA mode and dev signaling plugin
 ├── tsconfig.json              Strict React/Start TypeScript configuration
-├── server.mjs                 Production SPA and signaling server
+├── standalone-server.mjs      Optional direct Node server used by start:legacy
 ├── server/
-│   └── diagnostic-runtime.mjs Shared /config, /health, and /signal runtime
+│   ├── diagnostic-runtime.mjs Direct Node HTTP and WebSocket adapter
+│   ├── signaling-broker.mjs   Transport-neutral room and message protocol
+│   └── routes/                Nitro /config, /health, and /signal routes
 ├── src/
 │   ├── router.tsx             Fresh TanStack Router factory
 │   ├── routeTree.gen.ts       Generated file-route tree
@@ -164,7 +176,7 @@ tester/
 npm test
 npm run typecheck
 npm run build
-node --check server.mjs
+node --check standalone-server.mjs
 node --check server/diagnostic-runtime.mjs
 node --check src/modules/icecheck/lib/icecheck-client.client.js
 node --check src/modules/icecheck/lib/manual-codec.js
