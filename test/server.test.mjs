@@ -126,6 +126,7 @@ test('serves the diagnostic UI and ICE strategy configuration', async () => {
   );
   assert.match(page, /<title>Join WebRTC diagnostic room · icecheck<\/title>/);
   assert.match(page, /Trace a native WebRTC connection/);
+  assert.match(page, /href="https:\/\/github\.com\/michidk\/icecheck"/);
   assert.match(home, /Find where a peer connection fails/);
   assert.match(home, /connectivity diagnostic—not a bandwidth benchmark/);
   assert.match(home, /Start assisted test/);
