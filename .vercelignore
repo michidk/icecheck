@@ -1,0 +1,4 @@
+.playwright/
+.output/
+.vercel/
+node_modules/
