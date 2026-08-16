@@ -3,7 +3,10 @@ dist/
 .output/
 .vite/
 .tanstack/
-.playwright/
+.playwright/*
+!.playwright/screenshots/
+.playwright/screenshots/*
+!.playwright/screenshots/icecheck.png
 coverage/
 .env
 .env.*

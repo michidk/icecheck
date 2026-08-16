@@ -95,6 +95,7 @@ after(() => app?.kill('SIGTERM'));
 test('serves the diagnostic UI and ICE strategy configuration', async () => {
   const healthResponse = await fetch(`${baseUrl}/health`);
   const configResponse = await fetch(`${baseUrl}/config`);
+  const faviconResponse = await fetch(`${baseUrl}/favicon.svg`);
   const [homeResponse, sessionResponse, manualResponse, roomResponse] = await Promise.all([
     fetch(`${baseUrl}/`),
     fetch(`${baseUrl}/session`),
@@ -113,6 +114,8 @@ test('serves the diagnostic UI and ICE strategy configuration', async () => {
   assert.equal(health.ok, true);
   assert.deepEqual(config, { stunServers: [{ urls: ['stun:main.lohr.dev:3478'] }] });
   assert.equal(configResponse.headers.get('cache-control'), 'no-store');
+  assert.equal(faviconResponse.status, 200);
+  assert.match(faviconResponse.headers.get('content-type'), /image\/svg\+xml/);
   assert.deepEqual(
     buildIceConfiguration({ STUN_URLS: 'turn:relay.invalid:3478, stun:main.lohr.dev:3478' }),
     { stunServers: [{ urls: ['stun:main.lohr.dev:3478'] }] },

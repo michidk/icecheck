@@ -13,7 +13,10 @@ export const Route = createRootRoute({
       { name: 'theme-color', content: '#f6f6f6' },
       { title: 'icecheck' },
     ],
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [
+      { rel: 'icon', href: `${import.meta.env.BASE_URL}favicon.svg`, type: 'image/svg+xml' },
+      { rel: 'stylesheet', href: appCss },
+    ],
   }),
   shellComponent: RootDocument,
 })

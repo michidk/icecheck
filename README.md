@@ -2,6 +2,10 @@
 
 `icecheck` is a small TanStack Start SPA for two-browser WebRTC diagnostics. It isolates signaling, ICE candidate gathering, connectivity checks, data channels, and media transport so developers can see which layer failed.
 
+[![icecheck diagnostic mode chooser](.playwright/screenshots/icecheck.png)](https://icecheck.vercel.app)
+
+Live demo: [icecheck.vercel.app](https://icecheck.vercel.app)
+
 The browser implementation uses the native Web APIs directly:
 
 - `RTCPeerConnection`
