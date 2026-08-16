@@ -1,0 +1,43 @@
+{
+  "name": "webrtc-path-tester",
+  "version": "0.1.0",
+  "description": "A TanStack Start SPA for two-device WebRTC connectivity diagnostics.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/michidk/icecheck.git"
+  },
+  "bugs": {
+    "url": "https://github.com/michidk/icecheck/issues"
+  },
+  "homepage": "https://github.com/michidk/icecheck#readme",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build && tsc --noEmit",
+    "start": "NODE_ENV=production node server.mjs",
+    "pretest": "npm run build",
+    "test": "node --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "^1.170.29",
+    "@tanstack/react-start": "^1.168.46",
+    "express": "^5.1.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^6.0.2",
+    "vite": "^8.2.1"
+  }
+}

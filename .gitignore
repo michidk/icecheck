@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vite/
+.tanstack/
+.playwright/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
