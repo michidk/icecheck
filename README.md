@@ -6,6 +6,10 @@
 
 Live demo: [icecheck.vercel.app](https://icecheck.vercel.app)
 
+## Related project
+
+[mise](https://github.com/michidk/mise) ([live demo](https://miseshare.vercel.app)) is the small PeerJS screen-sharing service that motivated this diagnostic tool. Use icecheck when two devices can load Mise but cannot establish chat, screen media, or another direct WebRTC path.
+
 The browser implementation uses the native Web APIs directly:
 
 - `RTCPeerConnection`
