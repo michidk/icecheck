@@ -24,7 +24,7 @@ There are four user-facing routes with three distinct jobs:
 
 The assisted and manual routes import the reusable `src/modules/icecheck` feature. The route files contain only URL ownership; shared runtime UI and the native WebRTC controller have one implementation. The chooser UI belongs only to `/`, so it remains colocated under `routes/(home)/-components`.
 
-The controller is named `icecheck-client.client.js` and is loaded through `createClientOnlyFn()`. This keeps `window`, canvas, WebSocket, and WebRTC code out of the server bundle used to prerender the SPA shell.
+The controller is named `icecheck-client.client.ts` and is loaded through `createClientOnlyFn()`. This keeps `window`, canvas, WebSocket, and WebRTC code out of the server bundle used to prerender the SPA shell while preserving strict types across ICE, SDP, data-channel, and stats handling.
 
 During development, Vite owns the HTTP server and a small plugin attaches the direct Node diagnostic runtime. Production builds use Nitro: HTTP routes live under `server/routes`, and the WebSocket route adapts the same transport-neutral signaling broker to CrossWS. The integration suite exercises the generated Nitro server. [`standalone-server.mjs`](../standalone-server.mjs) remains an optional direct Node adapter for `npm run start:legacy`.
 
@@ -160,10 +160,7 @@ offer/answer failure
   -> signaling ordering, malformed SDP, or browser compatibility
 
 no srflx candidate
-  -> STUN DNS/reachability or NAT behavior
-
-no srflx candidate
-  -> main.lohr.dev DNS, UDP/3478 reachability, or NAT behavior
+  -> configured STUN DNS/reachability or NAT behavior
 
 ICE failed
   -> no mutually reachable direct candidate pair; no relay is configured
@@ -189,14 +186,14 @@ Manual-only mode does not require WebSocket forwarding, but it still requires bo
 
 - [`vite.config.ts`](../vite.config.ts): TanStack Start SPA configuration and development runtime attachment
 - [`standalone-server.mjs`](../standalone-server.mjs): direct Node static SPA host
-- [`server/diagnostic-runtime.mjs`](../server/diagnostic-runtime.mjs): direct Node HTTP and WebSocket adapter
-- [`server/signaling-broker.mjs`](../server/signaling-broker.mjs): transport-neutral rooms and signaling protocol
+- [`server/diagnostic-runtime.ts`](../server/diagnostic-runtime.ts): direct Node HTTP and WebSocket adapter
+- [`server/signaling-broker.ts`](../server/signaling-broker.ts): transport-neutral rooms and signaling protocol
 - [`server/routes`](../server/routes): Nitro production HTTP and WebSocket routes
 - [`src/router.tsx`](../src/router.tsx): TanStack Router factory
 - [`src/routes`](../src/routes): URL and document-shell ownership
 - [`src/routes/(home)/-components/home-page.tsx`](<../src/routes/(home)/-components/home-page.tsx>): mode chooser used only by the root route
 - [`src/modules/icecheck/components/assisted-diagnostic.tsx`](../src/modules/icecheck/components/assisted-diagnostic.tsx): assisted room journey shared by `/session` and `/room/$roomCode`
 - [`src/modules/icecheck/components/manual-diagnostic.tsx`](../src/modules/icecheck/components/manual-diagnostic.tsx): manual copy/paste journey
-- [`src/modules/icecheck/lib/icecheck-client.client.js`](../src/modules/icecheck/lib/icecheck-client.client.js): browser-only probe lifecycle, signaling modes, media/data tests, and statistics
-- [`src/modules/icecheck/lib/manual-codec.js`](../src/modules/icecheck/lib/manual-codec.js): versioned envelope encoding and strict structural validation
+- [`src/modules/icecheck/lib/icecheck-client.client.ts`](../src/modules/icecheck/lib/icecheck-client.client.ts): browser-only probe lifecycle, signaling modes, media/data tests, and statistics
+- [`src/modules/icecheck/lib/manual-codec.ts`](../src/modules/icecheck/lib/manual-codec.ts): versioned envelope encoding and strict structural validation
 - [`test/server.test.mjs`](../test/server.test.mjs): server, signaling relay, and envelope codec tests

@@ -4,12 +4,12 @@ import net from 'node:net';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
-import { buildIceConfiguration } from '../server/diagnostic-runtime.mjs';
+import { buildIceConfiguration } from '../server/diagnostic-runtime.ts';
 import {
   MANUAL_PROTOCOL_VERSION,
   decodeSignalEnvelope,
   encodeSignalEnvelope,
-} from '../src/modules/icecheck/lib/manual-codec.js';
+} from '../src/modules/icecheck/lib/manual-codec.ts';
 
 let app;
 let baseUrl;
@@ -109,16 +109,20 @@ test('serves the diagnostic UI and ICE strategy configuration', async () => {
   const home = await readFile(new URL('../src/routes/(home)/-components/home-page.tsx', import.meta.url), 'utf8');
   const assisted = await readFile(new URL('../src/modules/icecheck/components/assisted-diagnostic.tsx', import.meta.url), 'utf8');
   const manual = await readFile(new URL('../src/modules/icecheck/components/manual-diagnostic.tsx', import.meta.url), 'utf8');
-  const client = await readFile(new URL('../src/modules/icecheck/lib/icecheck-client.client.js', import.meta.url), 'utf8');
+  const client = await readFile(new URL('../src/modules/icecheck/lib/icecheck-client.client.ts', import.meta.url), 'utf8');
 
   assert.equal(health.ok, true);
-  assert.deepEqual(config, { stunServers: [{ urls: ['stun:main.lohr.dev:3478'] }] });
+  assert.deepEqual(config, { stunServers: [{
+    urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'],
+  }] });
   assert.equal(configResponse.headers.get('cache-control'), 'no-store');
   assert.equal(faviconResponse.status, 200);
   assert.match(faviconResponse.headers.get('content-type'), /image\/svg\+xml/);
   assert.deepEqual(
-    buildIceConfiguration({ STUN_URLS: 'turn:relay.invalid:3478, stun:main.lohr.dev:3478' }),
-    { stunServers: [{ urls: ['stun:main.lohr.dev:3478'] }] },
+    buildIceConfiguration({
+      STUN_URLS: 'turn:relay.invalid:3478, stun:main.lohr.dev:3478, stun:stun.l.google.com:19302',
+    }),
+    { stunServers: [{ urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }] },
   );
   assert.deepEqual(
     [homeResponse.status, sessionResponse.status, manualResponse.status, roomResponse.status],

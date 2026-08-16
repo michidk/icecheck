@@ -3,9 +3,180 @@ import {
   MANUAL_PROTOCOL_VERSION,
   decodeSignalEnvelope,
   encodeSignalEnvelope,
-} from './manual-codec.js';
+  type IceStrategyId,
+  type ManualDescriptionKind,
+  type ManualSignalEnvelope,
+} from './manual-codec.ts';
 
-const $ = (selector) => document.querySelector(selector);
+type AppElement = HTMLElement & {
+  disabled: boolean;
+  play(): Promise<void>;
+  requestVideoFrameCallback?: (callback: VideoFrameRequestCallback) => number;
+  srcObject: MediaProvider | null;
+  value: string;
+};
+type Role = 'host' | 'guest';
+type SignalingMode = 'websocket' | 'manual';
+type Verdict = 'pass' | 'partial' | 'fail';
+type CandidateKind = 'host' | 'srflx' | 'prflx' | 'relay' | 'unknown';
+type CandidateCounts = Record<CandidateKind, number>;
+
+interface IceConfiguration {
+  stunServers: RTCIceServer[];
+}
+
+interface Strategy {
+  id: IceStrategyId;
+  name: string;
+  description: string;
+  path: string;
+  config(): RTCConfiguration;
+}
+
+interface CandidateSummary {
+  type?: string;
+  protocol?: string;
+  address?: string;
+  port?: number;
+  networkType?: string;
+  relayProtocol?: string;
+}
+
+interface CandidatePair {
+  local?: CandidateSummary;
+  remote?: CandidateSummary;
+  currentRoundTripTimeMs?: number;
+  availableOutgoingBitrate?: number;
+  error?: string;
+}
+
+interface CandidateStats extends RTCStats {
+  address?: string;
+  candidateType?: string;
+  ip?: string;
+  networkType?: string;
+  port?: number;
+  protocol?: string;
+  relayProtocol?: string;
+}
+
+interface MediaStats {
+  inboundVideoBytes: number;
+  outboundVideoBytes: number;
+  framesDecoded: number;
+  framesEncoded: number;
+}
+
+interface ProbeState {
+  atMs: number;
+  connection: RTCPeerConnectionState;
+  ice: RTCIceConnectionState;
+  gathering: RTCIceGatheringState;
+  signaling: RTCSignalingState;
+}
+
+interface ProbeResult {
+  side: Role;
+  connectionState: RTCPeerConnectionState;
+  iceConnectionState: RTCIceConnectionState;
+  iceGatheringState: RTCIceGatheringState;
+  signalingState: RTCSignalingState;
+  dataChannelOpen: boolean;
+  pongs: number;
+  averageDataRttMs?: number;
+  mediaSupported: boolean;
+  videoNegotiated: boolean;
+  videoReceived: boolean;
+  mediaStats: MediaStats;
+  localCandidates: CandidateCounts;
+  remoteCandidates: CandidateCounts;
+  selectedPair?: CandidatePair;
+  errors: string[];
+  stateHistory: ProbeState[];
+  userAgent: string;
+}
+
+interface DiagnosticResult {
+  strategyId: IceStrategyId;
+  strategyName: string;
+  verdict: Verdict;
+  summary: string;
+  signalingRttMs?: number;
+  local?: ProbeResult;
+  remote?: ProbeResult;
+  completedAt: string;
+}
+
+interface Probe {
+  testId: string;
+  strategy: Strategy;
+  initiator: boolean;
+  signalingMode: SignalingMode;
+  pc: RTCPeerConnection;
+  channel?: RTCDataChannel;
+  channelOpen: boolean;
+  videoNegotiated: boolean;
+  videoReceived: boolean;
+  mediaSupported: boolean;
+  localCandidates: CandidateCounts;
+  remoteCandidates: CandidateCounts;
+  pendingCandidates: (RTCIceCandidateInit | null)[];
+  stateHistory: ProbeState[];
+  errors: string[];
+  pingRtts: number[];
+  pongCount: number;
+  readyPromise: Promise<boolean>;
+  readyResolve(value: boolean): void;
+  remoteResultPromise: Promise<ProbeResult | undefined>;
+  remoteResultResolve(value: ProbeResult | undefined): void;
+  gatheringPromise: Promise<boolean>;
+  gatheringResolve(value: boolean): void;
+  synthetic?: { stream: MediaStream; timer: ReturnType<typeof setInterval> };
+  manualRole?: 'offerer' | 'answerer';
+}
+
+interface SignalingMessage {
+  type: string;
+  clientId?: string;
+  roomCode?: string;
+  message?: string;
+  pingId?: string;
+  sentAt?: number;
+  testId?: string;
+  strategyId?: IceStrategyId;
+  description?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit | null;
+  result?: ProbeResult;
+}
+
+interface DiagnosticReport {
+  createdAt: string;
+  page: string;
+  secureContext: boolean;
+  userAgent: string;
+  manualOnly: boolean;
+  signaling: {
+    disabled?: boolean;
+    error?: string;
+    openMs?: number;
+    pendingPingAt?: number;
+    pendingPingId?: string;
+    rttMs?: number;
+    url?: string;
+  };
+  results: DiagnosticResult[];
+  iceConfiguration?: { stunUrls: string[] };
+  role?: Role;
+  roomCode?: string;
+  manual?: unknown;
+  copiedAt?: string;
+}
+
+const $ = <ElementType extends Element = AppElement>(selector: string): ElementType => {
+  const element = document.querySelector<ElementType>(selector);
+  if (!element) throw new Error(`Missing required element: ${selector}`);
+  return element;
+};
 
 const PROBE_MS = 7_000;
 const READY_TIMEOUT_MS = 4_000;
@@ -15,26 +186,26 @@ const APP_MODE = $('[data-icecheck-mode]')?.dataset.icecheckMode;
 const MANUAL_ONLY = APP_MODE === 'manual';
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-function appPath(pathname = '') {
+function appPath(pathname = ''): string {
   const suffix = pathname.replace(/^\/+/, '');
   return `${BASE_PATH}/${suffix}` || '/';
 }
 
-let socket;
-let clientId;
-let role;
-let roomCode;
+let socket: WebSocket | undefined;
+let clientId: string | undefined;
+let role: Role | undefined;
+let roomCode: string | undefined;
 let peerConnected = false;
-let signalRtt;
-let activeProbe;
+let signalRtt: number | undefined;
+let activeProbe: Probe | undefined;
 let running = false;
-let configuration = { stunServers: [] };
+let configuration: IceConfiguration = { stunServers: [] };
 let configurationLoaded = false;
-let manualProbe;
-let manualMonitor;
+let manualProbe: Probe | undefined;
+let manualMonitor: ReturnType<typeof setInterval> | undefined;
 let manualBusy = false;
 
-const report = {
+const report: DiagnosticReport = {
   createdAt: new Date().toISOString(),
   page: location.href,
   secureContext: window.isSecureContext,
@@ -44,7 +215,7 @@ const report = {
   results: [],
 };
 
-const strategyDefinitions = [
+const strategyDefinitions: Strategy[] = [
   {
     id: 'lan',
     name: 'No ICE server',
@@ -68,7 +239,7 @@ async function initialize() {
   if (!MANUAL_ONLY) renderStrategies();
   try {
     const response = await fetch(appPath('config'), { cache: 'no-store' });
-    configuration = await response.json();
+    configuration = await response.json() as IceConfiguration;
     configurationLoaded = true;
     report.iceConfiguration = {
       stunUrls: configuration.stunServers.flatMap(({ urls }) => Array.isArray(urls) ? urls : [urls]),
@@ -76,10 +247,10 @@ async function initialize() {
     renderEnvironment();
     updateRawReport();
     if (MANUAL_ONLY) syncManualControls();
-  } catch (error) {
+  } catch (error: unknown) {
     configurationLoaded = true;
     renderEnvironment();
-    logEvent(`Could not load ICE configuration: ${error.message}`);
+    logEvent(`Could not load ICE configuration: ${errorMessage(error)}`);
     if (MANUAL_ONLY) syncManualControls();
   }
   if (MANUAL_ONLY) {
@@ -139,11 +310,12 @@ function connectSignaling() {
   });
 
   socket.addEventListener('message', (event) => {
-    let message;
-    try { message = JSON.parse(event.data); } catch { return; }
+    let message: unknown;
+    try { message = JSON.parse(String(event.data)); } catch { return; }
+    if (!isSignalingMessage(message)) return;
     handleSignalingMessage(message).catch((error) => {
-      logEvent(`Handler error: ${error.message}`);
-      showToast(error.message);
+      logEvent(`Handler error: ${errorMessage(error)}`);
+      showToast(errorMessage(error));
     });
   });
 
@@ -165,9 +337,10 @@ function connectSignaling() {
   });
 }
 
-async function handleSignalingMessage(message) {
+async function handleSignalingMessage(message: SignalingMessage) {
   switch (message.type) {
     case 'hello':
+      if (!message.clientId) break;
       clientId = message.clientId;
       $('#create-room').disabled = false;
       $('#join-form button').disabled = false;
@@ -175,15 +348,17 @@ async function handleSignalingMessage(message) {
       joinFromPath();
       break;
     case 'room-created':
+      if (!message.roomCode) break;
       enterRoom('host', message.roomCode);
       break;
     case 'room-joined':
+      if (!message.roomCode) break;
       enterRoom('guest', message.roomCode);
       setPeerConnected(true);
       runSignalingPing();
       break;
     case 'join-error':
-      showToast(message.message);
+      showToast(message.message || 'Could not join the room.');
       break;
     case 'peer-joined':
       setPeerConnected(true);
@@ -203,7 +378,7 @@ async function handleSignalingMessage(message) {
       send({ type: 'signal-pong', pingId: message.pingId, sentAt: message.sentAt });
       break;
     case 'signal-pong':
-      if (message.pingId !== report.signaling.pendingPingId) break;
+      if (message.pingId !== report.signaling.pendingPingId || report.signaling.pendingPingAt === undefined) break;
       signalRtt = Math.max(0, Math.round(performance.now() - report.signaling.pendingPingAt));
       report.signaling.rttMs = signalRtt;
       $('#signal-detail').textContent = `Round trip ${signalRtt} ms · /signal`;
@@ -213,9 +388,11 @@ async function handleSignalingMessage(message) {
     case 'probe-start':
       await startGuestProbe(message);
       break;
-    case 'probe-ready':
-      if (activeProbe?.testId === message.testId) activeProbe.readyResolve(true);
+    case 'probe-ready': {
+      const probe = activeProbe;
+      if (probe && probe.testId === message.testId) probe.readyResolve(true);
       break;
+    }
     case 'probe-description':
       await acceptDescription(message);
       break;
@@ -225,17 +402,19 @@ async function handleSignalingMessage(message) {
     case 'probe-finish':
       await finishGuestProbe(message);
       break;
-    case 'probe-result':
-      if (activeProbe?.testId === message.testId) activeProbe.remoteResultResolve(message.result);
+    case 'probe-result': {
+      const probe = activeProbe;
+      if (probe && probe.testId === message.testId) probe.remoteResultResolve(message.result);
       break;
+    }
     case 'error':
-      showToast(message.message);
+      showToast(message.message || 'The signaling server reported an error.');
       logEvent(`Server: ${message.message}`);
       break;
   }
 }
 
-function send(message) {
+function send(message: Record<string, unknown>) {
   if (socket?.readyState !== WebSocket.OPEN) throw new Error('Signaling is not connected.');
   socket.send(JSON.stringify(message));
 }
@@ -249,7 +428,7 @@ function joinFromPath() {
   if (match) send({ type: 'join-room', roomCode: match[1] });
 }
 
-function enterRoom(nextRole, code) {
+function enterRoom(nextRole: Role, code: string) {
   role = nextRole;
   roomCode = code;
   report.role = role;
@@ -261,7 +440,7 @@ function enterRoom(nextRole, code) {
   $('#room-code').textContent = formatRoomCode(code);
   $('#role-label').textContent = role === 'host' ? 'Host device' : 'Second device';
   $('#host-controls').hidden = role !== 'host';
-  document.querySelectorAll('.run-one').forEach((button) => { button.hidden = role !== 'host'; });
+  document.querySelectorAll<HTMLElement>('.run-one').forEach((button) => { button.hidden = role !== 'host'; });
 
   if (role === 'host') {
     $('#room-state').textContent = 'Waiting for the second device';
@@ -277,10 +456,10 @@ function enterRoom(nextRole, code) {
   logEvent(`${role === 'host' ? 'Created' : 'Joined'} room ${code}`);
 }
 
-function setPeerConnected(connected) {
+function setPeerConnected(connected: boolean) {
   peerConnected = connected;
   $('#run-all').disabled = !connected || running;
-  document.querySelectorAll('.run-one').forEach((button) => { button.disabled = !connected || running; });
+  document.querySelectorAll<HTMLButtonElement>('.run-one').forEach((button) => { button.disabled = !connected || running; });
   if (!roomCode) return;
   if (connected) {
     $('#room-state').textContent = 'Both devices are connected';
@@ -336,7 +515,7 @@ async function runAllStrategies() {
   showToast('Diagnostic matrix complete.');
 }
 
-async function runOneStrategy(strategyId) {
+async function runOneStrategy(strategyId: IceStrategyId) {
   if (running || !peerConnected || role !== 'host') return;
   const strategy = strategyDefinitions.find(({ id }) => id === strategyId);
   if (!strategy) return;
@@ -350,10 +529,10 @@ async function runOneStrategy(strategyId) {
 function setRunningControls() {
   $('#run-all').disabled = running || !peerConnected;
   $('#run-all').textContent = running ? 'Running tests…' : 'Run all tests';
-  document.querySelectorAll('.run-one').forEach((button) => { button.disabled = running || !peerConnected; });
+  document.querySelectorAll<HTMLButtonElement>('.run-one').forEach((button) => { button.disabled = running || !peerConnected; });
 }
 
-async function executeStrategy(strategy) {
+async function executeStrategy(strategy: Strategy) {
   cleanupProbe();
   setStrategyStatus(strategy.id, 'running', 'Negotiating…', 'Creating fresh ICE candidates.');
   const testId = makeId();
@@ -366,8 +545,8 @@ async function executeStrategy(strategy) {
     try {
       await makeOffer(activeProbe);
       await delay(PROBE_MS);
-    } catch (error) {
-      activeProbe.errors.push(`Offer failed: ${error.message}`);
+    } catch (error: unknown) {
+      activeProbe.errors.push(`Offer failed: ${errorMessage(error)}`);
     }
   } else {
     activeProbe.errors.push('Second device did not prepare the peer connection.');
@@ -386,7 +565,8 @@ async function executeStrategy(strategy) {
   cleanupProbe();
 }
 
-async function startGuestProbe(message) {
+async function startGuestProbe(message: SignalingMessage) {
+  if (!message.strategyId || !message.testId) return;
   const strategy = strategyDefinitions.find(({ id }) => id === message.strategyId);
   if (!strategy) return;
   cleanupProbe();
@@ -396,10 +576,18 @@ async function startGuestProbe(message) {
   send({ type: 'probe-ready', testId: message.testId });
 }
 
-function createProbe(strategy, testId, initiator, signalingMode = 'websocket') {
+function createProbe(
+  strategy: Strategy,
+  testId: string,
+  initiator: boolean,
+  signalingMode: SignalingMode = 'websocket',
+): Probe {
   const rtcConfig = { ...strategy.config(), iceCandidatePoolSize: 2 };
   const pc = new RTCPeerConnection(rtcConfig);
-  const probe = {
+  const ready = deferred<boolean>();
+  const remoteResult = deferred<ProbeResult | undefined>();
+  const gathering = deferred<boolean>();
+  const probe: Probe = {
     testId,
     strategy,
     initiator,
@@ -417,18 +605,13 @@ function createProbe(strategy, testId, initiator, signalingMode = 'websocket') {
     errors: [],
     pingRtts: [],
     pongCount: 0,
-    readyPromise: undefined,
-    readyResolve: undefined,
-    remoteResultPromise: undefined,
-    remoteResultResolve: undefined,
-    gatheringPromise: undefined,
-    gatheringResolve: undefined,
-    synthetic: undefined,
+    readyPromise: ready.promise,
+    readyResolve: ready.resolve,
+    remoteResultPromise: remoteResult.promise,
+    remoteResultResolve: remoteResult.resolve,
+    gatheringPromise: gathering.promise,
+    gatheringResolve: gathering.resolve,
   };
-
-  probe.readyPromise = new Promise((resolve) => { probe.readyResolve = resolve; });
-  probe.remoteResultPromise = new Promise((resolve) => { probe.remoteResultResolve = resolve; });
-  probe.gatheringPromise = new Promise((resolve) => { probe.gatheringResolve = resolve; });
 
   pc.onicecandidate = ({ candidate }) => {
     if (candidate) countCandidate(probe.localCandidates, candidate);
@@ -458,10 +641,11 @@ function createProbe(strategy, testId, initiator, signalingMode = 'websocket') {
       if (signalingMode === 'manual') updateManualStatus(probe);
     };
     const stream = streams[0] || new MediaStream([track]);
-    $('#probe-video').srcObject = stream;
-    $('#probe-video').play().then(() => {
-      if (typeof $('#probe-video').requestVideoFrameCallback === 'function') {
-        $('#probe-video').requestVideoFrameCallback(() => {
+    const video = $<HTMLVideoElement>('#probe-video');
+    video.srcObject = stream;
+    video.play().then(() => {
+      if (typeof video.requestVideoFrameCallback === 'function') {
+        video.requestVideoFrameCallback(() => {
           probe.videoReceived = true;
           if (signalingMode === 'manual') updateManualStatus(probe);
         });
@@ -484,7 +668,7 @@ function createProbe(strategy, testId, initiator, signalingMode = 'websocket') {
   return probe;
 }
 
-function setupDataChannel(probe, channel) {
+function setupDataChannel(probe: Probe, channel: RTCDataChannel) {
   probe.channel = channel;
   channel.onopen = () => {
     probe.channelOpen = true;
@@ -501,8 +685,9 @@ function setupDataChannel(probe, channel) {
     if (probe.signalingMode === 'manual') updateManualStatus(probe);
   };
   channel.onmessage = ({ data }) => {
-    let message;
-    try { message = JSON.parse(data); } catch { return; }
+    let message: unknown;
+    try { message = JSON.parse(String(data)); } catch { return; }
+    if (!isProbePing(message)) return;
     if (message.kind === 'ping' && !probe.initiator) {
       channel.send(JSON.stringify({ kind: 'pong', sequence: message.sequence, sentAt: message.sentAt }));
     } else if (message.kind === 'pong' && probe.initiator) {
@@ -512,7 +697,7 @@ function setupDataChannel(probe, channel) {
   };
 }
 
-async function sendProbePings(probe) {
+async function sendProbePings(probe: Probe) {
   for (let sequence = 1; sequence <= 3; sequence += 1) {
     if (probe.channel?.readyState !== 'open') break;
     probe.channel.send(JSON.stringify({ kind: 'ping', sequence, sentAt: performance.now() }));
@@ -526,6 +711,7 @@ function createSyntheticVideo() {
   canvas.height = 180;
   if (typeof canvas.captureStream !== 'function') return undefined;
   const context = canvas.getContext('2d');
+  if (!context) return undefined;
   let frame = 0;
   const draw = () => {
     frame += 1;
@@ -543,15 +729,15 @@ function createSyntheticVideo() {
   return { stream: canvas.captureStream(10), timer };
 }
 
-async function makeOffer(probe) {
+async function makeOffer(probe: Probe) {
   const offer = await probe.pc.createOffer();
   await probe.pc.setLocalDescription(offer);
   send({ type: 'probe-description', testId: probe.testId, description: probe.pc.localDescription });
 }
 
-async function acceptDescription(message) {
+async function acceptDescription(message: SignalingMessage) {
   const probe = activeProbe;
-  if (!probe || probe.testId !== message.testId) return;
+  if (!probe || probe.testId !== message.testId || !message.description) return;
   await probe.pc.setRemoteDescription(message.description);
   await flushRemoteCandidates(probe);
   if (message.description.type === 'offer') {
@@ -561,39 +747,47 @@ async function acceptDescription(message) {
   }
 }
 
-async function acceptRemoteCandidate(message) {
+async function acceptRemoteCandidate(message: SignalingMessage) {
   const probe = activeProbe;
   if (!probe || probe.testId !== message.testId) return;
   if (message.candidate) countCandidate(probe.remoteCandidates, message.candidate);
   if (!probe.pc.remoteDescription) {
-    probe.pendingCandidates.push(message.candidate);
+    probe.pendingCandidates.push(message.candidate ?? null);
     return;
   }
   try {
     await probe.pc.addIceCandidate(message.candidate);
-  } catch (error) {
-    probe.errors.push(`Remote candidate rejected: ${error.message}`);
+  } catch (error: unknown) {
+    probe.errors.push(`Remote candidate rejected: ${errorMessage(error)}`);
   }
 }
 
-async function flushRemoteCandidates(probe) {
+async function flushRemoteCandidates(probe: Probe) {
   const candidates = probe.pendingCandidates.splice(0);
   for (const candidate of candidates) {
     try { await probe.pc.addIceCandidate(candidate); }
-    catch (error) { probe.errors.push(`Queued candidate rejected: ${error.message}`); }
+    catch (error: unknown) { probe.errors.push(`Queued candidate rejected: ${errorMessage(error)}`); }
   }
 }
 
 // Manual signaling deliberately uses non-trickle ICE. Waiting for gathering to
 // finish puts every candidate into the SDP so each side exchanges one payload.
-async function waitForManualGathering(probe) {
+async function waitForManualGathering(probe: Probe): Promise<boolean> {
   if (probe.pc.iceGatheringState === 'complete') return true;
   const complete = await withTimeout(probe.gatheringPromise, MANUAL_GATHER_TIMEOUT_MS, false);
   if (!complete) probe.errors.push(`ICE gathering did not finish within ${MANUAL_GATHER_TIMEOUT_MS / 1000} seconds.`);
   return complete;
 }
 
-function makeManualEnvelope(kind, probe, iceComplete) {
+function makeManualEnvelope(
+  kind: ManualDescriptionKind,
+  probe: Probe,
+  iceComplete: boolean,
+): ManualSignalEnvelope {
+  const description = probe.pc.localDescription;
+  if (!description?.sdp || (description.type !== 'offer' && description.type !== 'answer')) {
+    throw new Error('The browser did not create a complete local session description.');
+  }
   return {
     version: MANUAL_PROTOCOL_VERSION,
     kind,
@@ -602,8 +796,8 @@ function makeManualEnvelope(kind, probe, iceComplete) {
     createdAt: new Date().toISOString(),
     iceComplete,
     description: {
-      type: probe.pc.localDescription.type,
-      sdp: probe.pc.localDescription.sdp,
+      type: description.type,
+      sdp: description.sdp,
     },
   };
 }
@@ -616,6 +810,7 @@ async function createManualOffer() {
 
   try {
     const strategy = strategyDefinitions.find(({ id }) => id === $('#manual-strategy').value);
+    if (!strategy) throw new Error('Select a supported ICE strategy.');
     manualProbe = createProbe(strategy, makeId(), true, 'manual');
     manualProbe.manualRole = 'offerer';
     startManualMonitor(manualProbe);
@@ -649,9 +844,10 @@ async function processManualPayload() {
   }
 }
 
-async function acceptManualOffer(envelope) {
+async function acceptManualOffer(envelope: ManualSignalEnvelope) {
   cleanupManualProbe();
   const strategy = strategyDefinitions.find(({ id }) => id === envelope.strategyId);
+  if (!strategy) throw new Error('The offer uses an unsupported ICE strategy.');
   $('#manual-strategy').value = strategy.id;
   manualProbe = createProbe(strategy, envelope.sessionId, false, 'manual');
   manualProbe.manualRole = 'answerer';
@@ -666,7 +862,7 @@ async function acceptManualOffer(envelope) {
   logEvent(`Manual ${strategy.name}: answer ready (${formatCandidateCounts(manualProbe.localCandidates)})`);
 }
 
-async function applyManualAnswer(envelope) {
+async function applyManualAnswer(envelope: ManualSignalEnvelope) {
   if (!manualProbe || manualProbe.signalingMode !== 'manual' || !manualProbe.initiator) {
     throw new Error('Create an offer on this browser before applying an answer.');
   }
@@ -681,24 +877,24 @@ async function applyManualAnswer(envelope) {
   await refreshManualReport(manualProbe);
 }
 
-function setManualLocalPayload(envelope) {
+function setManualLocalPayload(envelope: ManualSignalEnvelope) {
   const encoded = encodeSignalEnvelope(envelope);
   $('#manual-local-payload').value = encoded;
   $('#manual-local-meta').textContent = `${envelope.kind} · ${encoded.length} chars · ICE ${envelope.iceComplete ? 'complete' : 'timed out'}`;
   syncManualControls();
 }
 
-function countCandidatesInSdp(sdp = '') {
+function countCandidatesInSdp(sdp = ''): CandidateCounts {
   const counts = emptyCandidateCounts();
   for (const line of sdp.split(/\r?\n/u)) {
     if (!line.startsWith('a=candidate:')) continue;
-    const type = line.match(/\btyp\s+(host|srflx|prflx|relay)\b/u)?.[1] || 'unknown';
+    const type = (line.match(/\btyp\s+(host|srflx|prflx|relay)\b/u)?.[1] || 'unknown') as CandidateKind;
     counts[type] += 1;
   }
   return counts;
 }
 
-function setManualBusy(busy, label = '') {
+function setManualBusy(busy: boolean, label = '') {
   manualBusy = busy;
   if (label) $('#manual-report').textContent = label;
   syncManualControls();
@@ -710,9 +906,9 @@ function syncManualControls() {
   $('#manual-copy-payload').disabled = !$('#manual-local-payload').value;
 }
 
-function updateManualStatus(probe) {
+function updateManualStatus(probe: Probe | undefined) {
   if (!probe || probe !== manualProbe) return;
-  $('#manual-role').textContent = probe.manualRole;
+  $('#manual-role').textContent = probe.manualRole || 'unknown';
   $('#manual-strategy-status').textContent = `${probe.strategy.id} (${probe.strategy.path})`;
   $('#manual-connection').textContent = probe.pc.connectionState;
   $('#manual-ice').textContent = probe.pc.iceConnectionState;
@@ -723,14 +919,14 @@ function updateManualStatus(probe) {
   $('#manual-remote-candidates').textContent = formatCandidateCounts(probe.remoteCandidates);
 }
 
-function startManualMonitor(probe) {
+function startManualMonitor(probe: Probe) {
   clearInterval(manualMonitor);
   updateManualStatus(probe);
   refreshManualReport(probe);
   manualMonitor = setInterval(() => refreshManualReport(probe), 1_000);
 }
 
-async function refreshManualReport(probe) {
+async function refreshManualReport(probe: Probe) {
   if (!probe || probe !== manualProbe || probe.pc.connectionState === 'closed') return;
   const result = await collectProbeResult(probe);
   if (probe !== manualProbe) return;
@@ -752,8 +948,8 @@ async function refreshManualReport(probe) {
   updateRawReport();
 }
 
-function formatDetailedPair(pair) {
-  const format = (candidate) => {
+function formatDetailedPair(pair: CandidatePair): string {
+  const format = (candidate?: CandidateSummary) => {
     if (!candidate) return '?';
     const endpoint = candidate.address && candidate.port ? ` ${candidate.address}:${candidate.port}` : '';
     const transport = candidate.protocol ? `/${candidate.protocol}` : '';
@@ -763,8 +959,8 @@ function formatDetailedPair(pair) {
   return `${format(pair.local)} -> ${format(pair.remote)}${Number.isFinite(pair.currentRoundTripTimeMs) ? ` · ${pair.currentRoundTripTimeMs} ms` : ''}`;
 }
 
-function setManualFailure(error) {
-  const message = error?.message || 'Manual signaling failed.';
+function setManualFailure(error: unknown) {
+  const message = errorMessage(error, 'Manual signaling failed.');
   $('#manual-report').textContent = JSON.stringify({ error: message, at: new Date().toISOString() }, null, 2);
   logEvent(`Manual signaling: ${message}`);
   showToast(message);
@@ -798,7 +994,7 @@ function cleanupManualProbe() {
   manualProbe = undefined;
 }
 
-async function finishGuestProbe(message) {
+async function finishGuestProbe(message: SignalingMessage) {
   const probe = activeProbe;
   if (!probe || probe.testId !== message.testId) return;
   const result = await collectProbeResult(probe);
@@ -813,7 +1009,7 @@ async function finishGuestProbe(message) {
   cleanupProbe();
 }
 
-async function collectProbeResult(probe) {
+async function collectProbeResult(probe: Probe): Promise<ProbeResult> {
   const selectedPair = await getSelectedPair(probe.pc);
   const mediaStats = await getMediaStats(probe.pc);
   probe.videoReceived ||= mediaStats.inboundVideoBytes > 0 || mediaStats.framesDecoded > 0;
@@ -841,8 +1037,8 @@ async function collectProbeResult(probe) {
   };
 }
 
-async function getMediaStats(pc) {
-  const result = { inboundVideoBytes: 0, outboundVideoBytes: 0, framesDecoded: 0, framesEncoded: 0 };
+async function getMediaStats(pc: RTCPeerConnection): Promise<MediaStats> {
+  const result: MediaStats = { inboundVideoBytes: 0, outboundVideoBytes: 0, framesDecoded: 0, framesEncoded: 0 };
   try {
     const stats = await pc.getStats();
     for (const stat of stats.values()) {
@@ -860,7 +1056,7 @@ async function getMediaStats(pc) {
   return result;
 }
 
-async function getSelectedPair(pc) {
+async function getSelectedPair(pc: RTCPeerConnection): Promise<CandidatePair | undefined> {
   try {
     const stats = await pc.getStats();
     let pair;
@@ -883,12 +1079,12 @@ async function getSelectedPair(pc) {
         : undefined,
       availableOutgoingBitrate: pair.availableOutgoingBitrate,
     };
-  } catch (error) {
-    return { error: error.message };
+  } catch (error: unknown) {
+    return { error: errorMessage(error) };
   }
 }
 
-function summarizeCandidate(candidate) {
+function summarizeCandidate(candidate: CandidateStats | undefined): CandidateSummary | undefined {
   if (!candidate) return undefined;
   return {
     type: candidate.candidateType,
@@ -900,11 +1096,15 @@ function summarizeCandidate(candidate) {
   };
 }
 
-function summarizeResult(strategy, local, remote) {
+function summarizeResult(
+  strategy: Strategy,
+  local: ProbeResult | undefined,
+  remote: ProbeResult | undefined,
+): DiagnosticResult {
   const primary = local || remote;
   const bothData = local ? local.dataChannelOpen && remote?.dataChannelOpen : remote?.dataChannelOpen;
   const mediaOkay = local ? remote?.videoReceived || local.mediaSupported === false : remote?.videoReceived;
-  let verdict = 'fail';
+  let verdict: Verdict = 'fail';
   let summary = 'ICE connection did not become usable.';
 
   if (bothData && mediaOkay) {
@@ -932,10 +1132,11 @@ function summarizeResult(strategy, local, remote) {
   };
 }
 
-function renderResult(result) {
+function renderResult(result: DiagnosticResult) {
   const card = document.querySelector(`[data-strategy="${result.strategyId}"]`);
   if (!card) return;
   const resultBox = card.querySelector('.strategy-result');
+  if (!resultBox) return;
   resultBox.innerHTML = `
     <span class="result-badge ${result.verdict}"><i></i><span>${verdictLabel(result.verdict)}</span></span>
     <p>${escapeHtml(result.summary)}</p>
@@ -961,7 +1162,7 @@ function renderResult(result) {
     <div><span>ICE state</span><b>${escapeHtml(primary?.iceConnectionState || 'unknown')}</b></div>
     <div><span>Local candidates</span><b>${escapeHtml(localCandidateSummary)}</b></div>
     <div><span>Remote candidates</span><b>${escapeHtml(remoteCandidateSummary)}</b></div>
-    <div><span>Data RTT</span><b>${Number.isFinite(rtt) ? `${Math.round(rtt)} ms` : 'not measured'}</b></div>
+    <div><span>Data RTT</span><b>${rtt !== undefined && Number.isFinite(rtt) ? `${Math.round(rtt)} ms` : 'not measured'}</b></div>
     <div><span>Video</span><b>${escapeHtml(videoLabel)}</b></div>
   `;
   card.append(details);
@@ -977,11 +1178,13 @@ function renderResult(result) {
 }
 
 function renderDiagnosis() {
-  const results = Object.fromEntries(report.results.map((result) => [result.strategyId, result]));
-  const passed = (id) => results[id]?.verdict === 'pass';
-  const attempted = (id) => Boolean(results[id]);
-  let title;
-  let detail;
+  const results: Partial<Record<IceStrategyId, DiagnosticResult>> = Object.fromEntries(
+    report.results.map((result) => [result.strategyId, result]),
+  );
+  const passed = (id: IceStrategyId) => results[id]?.verdict === 'pass';
+  const attempted = (id: IceStrategyId) => Boolean(results[id]);
+  let title: string;
+  let detail: string;
   let tone = 'default';
 
   if (passed('stun')) {
@@ -993,7 +1196,7 @@ function renderDiagnosis() {
     detail = attempted('stun')
       ? 'Host or peer-reflexive candidates worked, but the STUN-configured run failed. Compare candidate errors and state history; this difference may be transient.'
       : 'Run the STUN-configured probe next to test candidate gathering with the configured endpoint.';
-  } else if (['lan', 'stun'].every(attempted)) {
+  } else if ((['lan', 'stun'] satisfies IceStrategyId[]).every(attempted)) {
     title = 'Signaling succeeded; both direct WebRTC probes failed.';
     detail = 'The browsers exchanged SDP and candidates, but found no usable direct pair. Inspect ICE errors, candidate counts, firewall policy, and NAT behavior. No TURN relay is configured.';
     tone = 'bad';
@@ -1010,58 +1213,64 @@ function renderDiagnosis() {
   $('#diagnosis-detail').textContent = detail;
 }
 
-function verdictLabel(verdict) {
+function verdictLabel(verdict: Verdict): string {
   if (verdict === 'pass') return 'Passed';
   if (verdict === 'partial') return 'Partial';
   return 'Failed';
 }
 
-function formatPair(pair, localType, remoteType) {
+function formatPair(pair?: CandidatePair, localType?: string, remoteType?: string): string {
   if (!localType && !remoteType) return 'No selected candidate pair';
   const protocol = pair?.local?.protocol || pair?.remote?.protocol;
   return `${localType || '?'} → ${remoteType || '?'}${protocol ? ` over ${protocol.toUpperCase()}` : ''}`;
 }
 
-function candidateTypes(counts) {
+function candidateTypes(counts?: CandidateCounts): string | undefined {
   if (!counts) return undefined;
   const types = Object.entries(counts).filter(([, count]) => count > 0).map(([type]) => type);
   return types.join('+') || undefined;
 }
 
-function formatCandidateCounts(counts) {
+function formatCandidateCounts(counts?: CandidateCounts): string {
   if (!counts) return 'none';
   const values = Object.entries(counts).filter(([, count]) => count > 0).map(([type, count]) => `${type}:${count}`);
   return values.join(' ') || 'none';
 }
 
-function formatBytes(bytes) {
+function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function setStrategyStatus(id, state, label, detail) {
+function setStrategyStatus(id: IceStrategyId, state: string, label: string, detail: string) {
   const card = document.querySelector(`[data-strategy="${id}"]`);
   if (!card) return;
   card.querySelector('.result-details')?.remove();
   card.querySelector('.result-raw')?.remove();
-  card.querySelector('.strategy-result').innerHTML = `
+  const result = card.querySelector<HTMLElement>('.strategy-result');
+  if (!result) return;
+  result.innerHTML = `
     <span class="result-badge ${state}"><i></i><span>${escapeHtml(label)}</span></span>
     <p>${escapeHtml(detail)}</p>
   `;
 }
 
-function emptyCandidateCounts() {
+function emptyCandidateCounts(): CandidateCounts {
   return { host: 0, srflx: 0, prflx: 0, relay: 0, unknown: 0 };
 }
 
-function countCandidate(counts, candidate) {
-  const type = candidate.type || candidate.candidate?.match(/\btyp\s+(host|srflx|prflx|relay)\b/)?.[1] || 'unknown';
+function countCandidate(counts: CandidateCounts, candidate: RTCIceCandidate | RTCIceCandidateInit) {
+  const type = (
+    ('type' in candidate && candidate.type)
+    || candidate.candidate?.match(/\btyp\s+(host|srflx|prflx|relay)\b/)?.[1]
+    || 'unknown'
+  ) as CandidateKind;
   counts[type] = (counts[type] || 0) + 1;
 }
 
-function recordProbeState(probe) {
-  const state = {
+function recordProbeState(probe: Probe) {
+  const state: ProbeState = {
     atMs: Math.round(performance.now()),
     connection: probe.pc.connectionState,
     ice: probe.pc.iceConnectionState,
@@ -1069,7 +1278,8 @@ function recordProbeState(probe) {
     signaling: probe.pc.signalingState,
   };
   const previous = probe.stateHistory.at(-1);
-  if (!previous || ['connection', 'ice', 'gathering', 'signaling'].some((key) => previous[key] !== state[key])) {
+  const stateKeys: (keyof Omit<ProbeState, 'atMs'>)[] = ['connection', 'ice', 'gathering', 'signaling'];
+  if (!previous || stateKeys.some((key) => previous[key] !== state[key])) {
     probe.stateHistory.push(state);
   }
 }
@@ -1080,7 +1290,7 @@ function cleanupProbe() {
   activeProbe = undefined;
 }
 
-function destroyProbe(probe) {
+function destroyProbe(probe: Probe | undefined) {
   if (!probe) return;
   if (probe.synthetic) {
     clearInterval(probe.synthetic.timer);
@@ -1091,17 +1301,18 @@ function destroyProbe(probe) {
   $('#probe-video').srcObject = null;
 }
 
-function setSocketStatus(state, text) {
+function setSocketStatus(state: string, text: string) {
   const badge = $('#socket-badge');
   badge.className = `badge ${state}`;
-  badge.querySelector('span').textContent = text;
+  const label = badge.querySelector('span');
+  if (label) label.textContent = text;
 }
 
-function formatRoomCode(code) {
+function formatRoomCode(code: string): string {
   return code.length > 3 ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
 }
 
-function shortId(id) {
+function shortId(id?: string): string {
   return id ? id.slice(0, 8) : 'unknown';
 }
 
@@ -1112,13 +1323,13 @@ function makeId() {
   return Array.from(bytes, (value) => value.toString(16)).join('-');
 }
 
-function logEvent(message) {
+function logEvent(message: string) {
   const events = $('#events');
   if (!events) return;
   const item = document.createElement('li');
   item.textContent = `${new Date().toLocaleTimeString()}  ${message}`;
   events.append(item);
-  while (events.children.length > 200) events.firstElementChild.remove();
+  while (events.children.length > 200) events.firstElementChild?.remove();
   const count = events.children.length;
   $('#event-count').textContent = `${count} ${count === 1 ? 'event' : 'events'}`;
 }
@@ -1128,15 +1339,17 @@ function updateRawReport() {
   if (output) output.textContent = JSON.stringify(report, null, 2);
 }
 
-function showToast(message) {
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+function showToast(message: string) {
   const toast = $('#toast');
   toast.textContent = message;
   toast.classList.add('show');
-  clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => toast.classList.remove('show'), 2800);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
 }
 
-function escapeHtml(value) {
+function escapeHtml(value: unknown): string {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -1145,15 +1358,19 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function delay(ms) {
+function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function withTimeout(promise, ms, fallback) {
+function withTimeout<Value, Fallback>(
+  promise: Promise<Value>,
+  ms: number,
+  fallback: Fallback,
+): Promise<Value | Fallback> {
   return Promise.race([promise, delay(ms).then(() => fallback)]);
 }
 
-async function copyText(text, confirmation) {
+async function copyText(text: string, confirmation: string) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -1167,6 +1384,34 @@ async function copyText(text, confirmation) {
   showToast(confirmation);
 }
 
+function deferred<Value>() {
+  let resolve!: (value: Value) => void;
+  const promise = new Promise<Value>((nextResolve) => { resolve = nextResolve; });
+  return { promise, resolve };
+}
+
+function isSignalingMessage(value: unknown): value is SignalingMessage {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && 'type' in value
+    && typeof value.type === 'string',
+  );
+}
+
+function isProbePing(value: unknown): value is { kind: 'ping' | 'pong'; sequence: number; sentAt: number } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as { kind?: unknown; sequence?: unknown; sentAt?: unknown };
+  return (candidate.kind === 'ping' || candidate.kind === 'pong')
+    && typeof candidate.sequence === 'number'
+    && typeof candidate.sentAt === 'number';
+}
+
+function errorMessage(error: unknown, fallback = 'Unexpected error.'): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 $('#create-room')?.addEventListener('click', () => send({ type: 'create-room' }));
 $('#join-form')?.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -1174,11 +1419,12 @@ $('#join-form')?.addEventListener('submit', (event) => {
   if (code) send({ type: 'join-room', roomCode: code });
 });
 $('#copy-link')?.addEventListener('click', () => copyText($('#share-link').value, 'Test link copied.'));
-$('#room-code')?.addEventListener('click', () => copyText(roomCode, 'Room code copied.'));
+$('#room-code')?.addEventListener('click', () => copyText(roomCode || '', 'Room code copied.'));
 $('#run-all')?.addEventListener('click', runAllStrategies);
 $('#strategy-list')?.addEventListener('click', (event) => {
-  const button = event.target.closest('[data-run]');
-  if (button) runOneStrategy(button.dataset.run);
+  const button = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-run]') : null;
+  const strategyId = button?.dataset.run;
+  if (strategyId === 'lan' || strategyId === 'stun') runOneStrategy(strategyId);
 });
 $('#copy-report')?.addEventListener('click', () => {
   report.page = location.href;
@@ -1196,5 +1442,5 @@ $('#manual-copy-payload')?.addEventListener('click', () => {
 $('#manual-copy-report')?.addEventListener('click', (event) => {
   event.preventDefault();
   event.stopPropagation();
-  copyText($('#manual-report').textContent, 'Manual probe report copied.');
+  copyText($('#manual-report').textContent || '', 'Manual probe report copied.');
 });

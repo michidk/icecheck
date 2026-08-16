@@ -130,7 +130,7 @@ This is useful when verifying that SDP candidates were embedded before moving th
 
 ## Validation rules
 
-[`src/modules/icecheck/lib/manual-codec.js`](../src/modules/icecheck/lib/manual-codec.js) rejects payloads when:
+[`src/modules/icecheck/lib/manual-codec.ts`](../src/modules/icecheck/lib/manual-codec.ts) rejects payloads when:
 
 - The value is not valid base64url.
 - The decoded value is not JSON.

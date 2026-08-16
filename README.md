@@ -130,20 +130,22 @@ See [Architecture and diagnostics](docs/architecture.md) for the complete flow a
 | `HOST` | `0.0.0.0` | Network interface to bind |
 | `BASE_PATH` | _(empty)_ | Optional URL prefix, such as `/tools/icecheck` |
 | `ALLOWED_HOSTS` | _(empty)_ | Comma-separated hostnames accepted by the Vite development server |
-| `STUN_URLS` | `stun:main.lohr.dev:3478` | Comma-separated STUN URLs; non-STUN entries are ignored |
+| `STUN_URLS` | `stun:main.lohr.dev:3478,stun:stun.l.google.com:19302` | Comma-separated STUN URLs; the second default is a public fallback and non-STUN entries are ignored |
+
+Browsers receive both defaults and may query them concurrently; WebRTC does not guarantee a strictly sequential failover order.
 
 The tester is intentionally STUN-only. Connections that require a media relay will fail, which makes that limitation visible instead of silently falling back to TURN.
 
 ## Framework and repository map
 
 ```text
-tester/
+icecheck/
 ├── vite.config.ts             TanStack Start SPA mode and dev signaling plugin
 ├── tsconfig.json              Strict React/Start TypeScript configuration
 ├── standalone-server.mjs      Optional direct Node server used by start:legacy
 ├── server/
-│   ├── diagnostic-runtime.mjs Direct Node HTTP and WebSocket adapter
-│   ├── signaling-broker.mjs   Transport-neutral room and message protocol
+│   ├── diagnostic-runtime.ts  Direct Node HTTP and WebSocket adapter
+│   ├── signaling-broker.ts    Transport-neutral room and message protocol
 │   └── routes/                Nitro /config, /health, and /signal routes
 ├── src/
 │   ├── router.tsx             Fresh TanStack Router factory
@@ -165,8 +167,8 @@ tester/
 │   │   ├── hooks/
 │   │   │   └── use-icecheck-client.ts
 │   │   └── lib/
-│   │       ├── icecheck-client.client.js
-│   │       └── manual-codec.js
+│   │       ├── icecheck-client.client.ts
+│   │       └── manual-codec.ts
 │   └── styles/app.css         Compact responsive styling
 ├── docs/
 │   ├── architecture.md        Components, probe lifecycle, and diagnostics
@@ -180,10 +182,6 @@ tester/
 npm test
 npm run typecheck
 npm run build
-node --check standalone-server.mjs
-node --check server/diagnostic-runtime.mjs
-node --check src/modules/icecheck/lib/icecheck-client.client.js
-node --check src/modules/icecheck/lib/manual-codec.js
 npm audit --omit=dev
 ```
 

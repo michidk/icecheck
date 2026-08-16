@@ -1,5 +1,28 @@
 import crypto from 'node:crypto'
 
+export interface SignalingSocket {
+  close(): unknown
+  send(payload: string): unknown
+}
+
+interface ClientMetadata {
+  clientId: string
+  roomCode?: string
+  role?: 'host' | 'guest'
+}
+
+interface Room {
+  createdAt: number
+  guest?: SignalingSocket
+  host: SignalingSocket
+}
+
+interface SignalingMessage {
+  type?: string
+  roomCode?: unknown
+  [key: string]: unknown
+}
+
 const ROOM_TTL_MS = 60 * 60 * 1000
 const FORWARDED_TYPES = new Set([
   'signal-ping',
@@ -13,11 +36,11 @@ const FORWARDED_TYPES = new Set([
 ])
 
 export function createSignalingBroker() {
-  const connections = new Set()
-  const metadata = new WeakMap()
-  const rooms = new Map()
+  const connections = new Set<SignalingSocket>()
+  const metadata = new WeakMap<SignalingSocket, ClientMetadata>()
+  const rooms = new Map<string, Room>()
 
-  function connect(socket) {
+  function connect(socket: SignalingSocket) {
     expireRooms()
     const client = { clientId: crypto.randomUUID(), roomCode: undefined, role: undefined }
     connections.add(socket)
@@ -25,9 +48,9 @@ export function createSignalingBroker() {
     send(socket, { type: 'hello', clientId: client.clientId, serverTime: Date.now() })
   }
 
-  function receive(socket, raw) {
+  function receive(socket: SignalingSocket, raw: string | { toString(): string }) {
     expireRooms()
-    let message
+    let message: SignalingMessage
     try {
       message = typeof raw === 'string' ? JSON.parse(raw) : JSON.parse(raw.toString())
     } catch {
@@ -43,7 +66,7 @@ export function createSignalingBroker() {
       joinRoom(socket, normalizeRoomCode(message.roomCode))
       return
     }
-    if (!FORWARDED_TYPES.has(message?.type)) return
+    if (!message.type || !FORWARDED_TYPES.has(message.type)) return
 
     const peer = getPeer(socket)
     if (!peer) {
@@ -53,7 +76,7 @@ export function createSignalingBroker() {
     send(peer, { ...message, from: metadata.get(socket)?.clientId })
   }
 
-  function disconnect(socket) {
+  function disconnect(socket: SignalingSocket) {
     if (!connections.delete(socket)) return
     leaveRoom(socket)
     metadata.delete(socket)
@@ -91,7 +114,7 @@ export function createSignalingBroker() {
     } while (true)
   }
 
-  function createRoom(socket) {
+  function createRoom(socket: SignalingSocket) {
     const client = metadata.get(socket)
     if (!client) return
     leaveRoom(socket)
@@ -102,7 +125,7 @@ export function createSignalingBroker() {
     send(socket, { type: 'room-created', roomCode })
   }
 
-  function joinRoom(socket, roomCode) {
+  function joinRoom(socket: SignalingSocket, roomCode: string) {
     const client = metadata.get(socket)
     if (!client) return
     const room = rooms.get(roomCode)
@@ -123,14 +146,15 @@ export function createSignalingBroker() {
     send(room.host, { type: 'peer-joined', peerId: client.clientId })
   }
 
-  function getPeer(socket) {
+  function getPeer(socket: SignalingSocket): SignalingSocket | undefined {
     const client = metadata.get(socket)
-    const room = rooms.get(client?.roomCode)
+    if (!client?.roomCode) return undefined
+    const room = rooms.get(client.roomCode)
     if (!room) return undefined
     return client.role === 'host' ? room.guest : room.host
   }
 
-  function leaveRoom(socket) {
+  function leaveRoom(socket: SignalingSocket) {
     const client = metadata.get(socket)
     const roomCode = client?.roomCode
     const role = client?.role
@@ -151,7 +175,7 @@ export function createSignalingBroker() {
     }
   }
 
-  function send(socket, message) {
+  function send(socket: SignalingSocket | undefined, message: SignalingMessage) {
     if (!socket || !connections.has(socket)) return
     try { socket.send(JSON.stringify(message)) } catch { disconnect(socket) }
   }
@@ -166,6 +190,6 @@ export function createSignalingBroker() {
   }
 }
 
-function normalizeRoomCode(value = '') {
+function normalizeRoomCode(value: unknown = ''): string {
   return String(value).trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
 }

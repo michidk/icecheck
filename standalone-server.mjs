@@ -2,7 +2,7 @@ import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
-import { createDiagnosticRuntime } from './server/diagnostic-runtime.mjs'
+import { createDiagnosticRuntime } from './server/diagnostic-runtime.ts'
 
 const directory = path.dirname(fileURLToPath(import.meta.url))
 const port = Number(process.env.PORT || 3100)

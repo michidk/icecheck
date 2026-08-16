@@ -1,15 +1,19 @@
-import { WebSocketServer } from 'ws'
-import { createSignalingBroker } from './signaling-broker.mjs'
+import type { IncomingMessage, Server as HttpServer, ServerResponse } from 'node:http'
+import type { Duplex } from 'node:stream'
+import { WebSocketServer, type RawData } from 'ws'
+import { createSignalingBroker } from './signaling-broker.ts'
 
-export function createDiagnosticRuntime(environment = process.env) {
+type RuntimeEnvironment = Record<string, string | undefined>
+
+export function createDiagnosticRuntime(environment: RuntimeEnvironment = process.env) {
   const broker = createSignalingBroker()
   const signaling = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 })
   const basePath = normalizeBasePath(environment.BASE_PATH)
-  const runtimePath = (pathname) => `${basePath}${pathname}`
-  let attachedServer
-  let roomCleanup
+  const runtimePath = (pathname: string) => `${basePath}${pathname}`
+  let attachedServer: HttpServer | undefined
+  let roomCleanup: NodeJS.Timeout | undefined
 
-  function middleware(request, response, next) {
+  function middleware(request: IncomingMessage, response: ServerResponse, next: () => void) {
     response.setHeader('Cache-Control', 'no-store')
     response.setHeader('Referrer-Policy', 'no-referrer')
     response.setHeader('X-Content-Type-Options', 'nosniff')
@@ -28,7 +32,7 @@ export function createDiagnosticRuntime(environment = process.env) {
     next()
   }
 
-  function attach(server) {
+  function attach(server: HttpServer) {
     if (attachedServer) return close
     attachedServer = server
     server.on('upgrade', handleUpgrade)
@@ -37,7 +41,7 @@ export function createDiagnosticRuntime(environment = process.env) {
     return close
   }
 
-  function handleUpgrade(request, socket, head) {
+  function handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer) {
     if (new URL(request.url || '/', 'http://localhost').pathname !== runtimePath('/signal')) return
     signaling.handleUpgrade(request, socket, head, (webSocket) => {
       signaling.emit('connection', webSocket, request)
@@ -54,7 +58,7 @@ export function createDiagnosticRuntime(environment = process.env) {
 
   signaling.on('connection', (socket) => {
     broker.connect(socket)
-    socket.on('message', (raw) => broker.receive(socket, raw))
+    socket.on('message', (raw: RawData) => broker.receive(socket, raw))
     socket.on('close', () => broker.disconnect(socket))
     socket.on('error', () => broker.disconnect(socket))
   })
@@ -62,23 +66,23 @@ export function createDiagnosticRuntime(environment = process.env) {
   return { attach, close, middleware }
 }
 
-export function buildIceConfiguration(environment = process.env) {
-  const stunUrls = splitList(environment.STUN_URLS || 'stun:main.lohr.dev:3478')
+export function buildIceConfiguration(environment: RuntimeEnvironment = process.env) {
+  const stunUrls = splitList(environment.STUN_URLS || 'stun:main.lohr.dev:3478,stun:stun.l.google.com:19302')
     .filter((url) => /^stuns?:/i.test(url))
   const stunServers = stunUrls.length ? [{ urls: stunUrls }] : []
   return { stunServers }
 }
 
-function splitList(value) {
+function splitList(value: string): string[] {
   return value.split(',').map((item) => item.trim()).filter(Boolean)
 }
 
-function normalizeBasePath(value = '') {
+function normalizeBasePath(value = ''): string {
   const normalized = String(value).trim().replace(/^\/*|\/*$/g, '')
   return normalized ? `/${normalized}` : ''
 }
 
-function sendJson(response, value) {
+function sendJson(response: ServerResponse, value: unknown) {
   const body = JSON.stringify(value)
   response.statusCode = 200
   response.setHeader('Content-Type', 'application/json; charset=utf-8')
