@@ -1,58 +1,34 @@
 import { Link } from '@tanstack/react-router'
-import { useEffect } from 'react'
 import { SiteHeader } from '../../../components/site-header'
 
 export function HomePage() {
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('manual') === '1') {
-      window.location.replace(`${import.meta.env.BASE_URL}manual`)
-    }
-  }, [])
-
   return (
     <>
-      <SiteHeader label="WebRTC connectivity diagnostics" showModeLink={false} />
+      <SiteHeader label="WebRTC connectivity diagnostics" showHomeLink={false} />
 
-      <main className="mode-home">
-        <section className="intro mode-intro">
+      <main className="home-page">
+        <section className="intro home-intro">
           <span className="eyebrow">Native WebRTC diagnostics</span>
-          <h1>Find where a peer connection fails</h1>
-          <p>Connect two browsers, compare direct ICE paths with and without STUN, and inspect the selected candidate pair, state transitions, data-channel RTT, and synthetic-video stats. This is a connectivity diagnostic—not a bandwidth benchmark—and it does not use PeerJS or TURN.</p>
+          <h1>Find whether two browsers can establish a direct peer connection</h1>
+          <p>Compare local and STUN-assisted ICE paths, then inspect candidate types, connection state, data-channel RTT, and synthetic-video transport. The diagnostic uses native browser WebRTC APIs and does not require durable server state.</p>
         </section>
 
-        <section className="mode-grid" aria-label="Diagnostic modes">
-          <article className="mode-card recommended">
-            <div className="mode-card-heading">
-              <span className="mode-index">01</span>
-              <span className="label">Recommended</span>
-            </div>
-            <h2>Server-assisted signaling</h2>
-            <p>A WebSocket exchanges SDP and trickled ICE candidates, then each probe runs over native WebRTC.</p>
-            <ul>
-              <li>Checks the WebSocket signaling path</li>
-              <li>Compares no-server and STUN configurations</li>
-              <li>Verifies data-channel and video transport</li>
-            </ul>
-            <Link className="button primary mode-action" to="/session">Start assisted test</Link>
-          </article>
-
-          <article className="mode-card">
-            <div className="mode-card-heading">
-              <span className="mode-index">02</span>
-              <span className="label">Developer mode</span>
-            </div>
-            <h2>Manual SDP exchange</h2>
-            <p>Carry complete base64url offers and answers yourself to remove the signaling server from the test.</p>
-            <ul>
-              <li>Never opens the signaling WebSocket</li>
-              <li>Uses non-trickle ICE with embedded candidates</li>
-              <li>Tests one ICE configuration per exchange</li>
-            </ul>
-            <Link className="button mode-action" to="/manual">Open manual mode</Link>
-          </article>
+        <section className="diagnostic-card" aria-labelledby="manual-diagnostic-title">
+          <div className="diagnostic-card-heading">
+            <span className="diagnostic-index">01</span>
+            <span className="label">Copy/paste workflow</span>
+          </div>
+          <h2 id="manual-diagnostic-title">Run a two-browser diagnostic</h2>
+          <p>One browser creates a complete offer. The second browser processes it and returns a complete answer.</p>
+          <ul>
+            <li>Stateless deployment with no server coordination</li>
+            <li>Non-trickle ICE embeds gathered candidates in each payload</li>
+            <li>LAN-only and STUN-assisted configurations</li>
+          </ul>
+          <Link className="button primary diagnostic-action" to="/manual">Start diagnostic</Link>
         </section>
 
-        <p className="mode-guidance"><strong>Choose assisted</strong> for the complete deployed path. Choose manual when you suspect WebSocket handling, a reverse proxy, or the signaling protocol.</p>
+        <p className="home-guidance">You will need this page open in two browsers or devices, plus a way to transfer text between them.</p>
       </main>
     </>
   )

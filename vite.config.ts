@@ -3,7 +3,6 @@ import { nitro } from 'nitro/vite'
 import viteReact from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
-import type { Server as HttpServer } from 'node:http'
 import { createDiagnosticRuntime } from './server/diagnostic-runtime.ts'
 
 const basePath = normalizeBasePath(process.env.BASE_PATH)
@@ -15,7 +14,6 @@ function diagnosticRuntimePlugin(): Plugin {
     name: 'icecheck-diagnostic-runtime',
     configureServer(server) {
       server.middlewares.use(runtime.middleware)
-      if (server.httpServer) runtime.attach(server.httpServer as HttpServer)
     },
   }
 }
@@ -40,7 +38,6 @@ export default defineConfig({
     }),
     nitro({
       serverDir: 'server',
-      features: { websocket: true },
     }),
     viteReact(),
   ],

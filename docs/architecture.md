@@ -1,199 +1,104 @@
-# Architecture and diagnostics
+# Architecture
 
-## Goals
+icecheck is a stateless TanStack Start SPA with a browser-only WebRTC diagnostic module. The server delivers the application and public STUN configuration; users transfer session descriptions directly between two browsers.
 
-icecheck separates four concerns that are often conflated during WebRTC debugging:
-
-1. Can both browsers load the application and ICE configuration?
-2. Can they exchange signaling messages?
-3. Can ICE construct a working network path?
-4. Can data and media travel over that path?
-
-The implementation creates a new `RTCPeerConnection` for every strategy so candidates and state from an earlier test cannot contaminate the next result.
-
-## Framework boundary
-
-TanStack Start owns the document shell, browser bootstrap, and file-based routes. SPA mode is enabled in [`vite.config.ts`](../vite.config.ts), so Start prerenders only `_shell.html`; the actual diagnostic page renders on the client.
-
-There are four user-facing routes with three distinct jobs:
-
-- `/` is a mode chooser. It explains the difference between assisted and manual signaling before any connection is started.
-- `/session` creates or joins an assisted room and runs the two-strategy matrix.
-- `/room/$roomCode` opens a shareable assisted-room URL on the second browser.
-- `/manual` runs the copy/paste offer-answer workflow without opening a WebSocket.
-
-The assisted and manual routes import the reusable `src/modules/icecheck` feature. The route files contain only URL ownership; shared runtime UI and the native WebRTC controller have one implementation. The chooser UI belongs only to `/`, so it remains colocated under `routes/(home)/-components`.
-
-The controller is named `icecheck-client.client.ts` and is loaded through `createClientOnlyFn()`. This keeps `window`, canvas, WebSocket, and WebRTC code out of the server bundle used to prerender the SPA shell while preserving strict types across ICE, SDP, data-channel, and stats handling.
-
-During development, Vite owns the HTTP server and a small plugin attaches the direct Node diagnostic runtime. Production builds use Nitro: HTTP routes live under `server/routes`, and the WebSocket route adapts the same transport-neutral signaling broker to CrossWS. The integration suite exercises the generated Nitro server. [`standalone-server.mjs`](../standalone-server.mjs) remains an optional direct Node adapter for `npm run start:legacy`.
-
-## Components
+## Boundaries
 
 ```text
-Browser A                                  Browser B
----------                                  ---------
-native RTCPeerConnection                   native RTCPeerConnection
-data-channel ping sender                   data-channel echo handler
-generated canvas video                     hidden video receiver
-getStats sampler                           getStats sampler
-       |                                          |
-       +------ WebSocket or copied SDP -----------+
-                          |
-                 diagnostic runtime
-          (Vite dev or Node production server)
+routes                    icecheck feature                  platform adapters
+------                    ----------------                  -----------------
+/ overview  ----------->  public React components
+/manual     ----------->  lifecycle hook
+                           manual controller  ----------->  native browser WebRTC
+                           codec + reports
+
+browser GET /config  ------------------------------------>  Nitro or Vite HTTP adapter
+browser GET /health  ------------------------------------>  Nitro or Vite HTTP adapter
 ```
 
-The application server has three responsibilities:
+- Route files own URLs, metadata, and page composition.
+- `src/modules/icecheck/components` is the feature's public UI boundary.
+- `hooks/use-manual-diagnostic.ts` loads browser code only after hydration and disposes it on route unmount.
+- `lib/manual-client.client.ts` coordinates the UI state machine.
+- `lib/probe-session.client.ts` owns the lifetime of `RTCPeerConnection`, data channels, tracks, and timers.
+- `lib/probe-result.client.ts` translates browser stats into report types.
+- `lib/manual-codec.ts` owns the versioned copy/paste envelope and defensive validation.
+- Server code does not import browser feature internals.
 
-- Serve static files.
-- Return public ICE configuration from `/config`.
-- Relay allowlisted signaling messages over `/signal` for the server-assisted mode.
+The architecture checker enforces the route-to-feature and server-to-client import boundaries.
 
-It does not terminate WebRTC, inspect media, relay media, or forward data-channel messages. TanStack Start and React do not wrap `RTCPeerConnection`; the feature controller calls the browser APIs directly.
+## Routes and server surface
 
-## Server-assisted signaling protocol
+The application exposes two pages:
 
-The server accepts one host and one guest per room. It forwards only these message types:
+- `/` explains the workflow and links to the diagnostic.
+- `/manual` owns the interactive two-browser exchange.
 
-- `signal-ping` and `signal-pong`
-- `probe-start` and `probe-ready`
-- `probe-description`
-- `probe-candidate`
-- `probe-finish` and `probe-result`
+The server exposes two JSON endpoints:
 
-Probe sequence:
+- `/config` returns allowlisted public STUN URLs.
+- `/health` returns `{ "ok": true }`.
+
+There is no WebSocket endpoint, room registry, peer registry, or cross-request session state. This makes the deployment safe to distribute across short-lived function instances.
+
+## Negotiation flow
+
+icecheck uses non-trickle ICE because the clipboard cannot carry candidates discovered after an offer or answer has been transferred.
 
 ```text
-host                    server                    guest
- | probe-start            |                         |
- |----------------------->|------------------------>|
- |                        |            create RTCPeerConnection
- | probe-ready            |                         |
- |<-----------------------|<------------------------|
- | create offer           |                         |
- | SDP offer              |                         |
- |----------------------->|------------------------>|
- | ICE candidates         |                         |
- |<---------------------->|<----------------------->|
- | SDP answer             |                         |
- |<-----------------------|<------------------------|
- |                                                   |
- |<============== native WebRTC path ===============>|
- |                                                   |
- | probe-finish           |                         |
- |----------------------->|------------------------>|
- | probe-result           |                         |
- |<-----------------------|<------------------------|
+Browser A                                      Browser B
+---------                                      ---------
+create peer connection
+create data channel and generated video
+create and set local offer
+wait for ICE gathering
+copy complete offer  ------------------------> validate and set remote offer
+                                                create and set local answer
+                                                wait for ICE gathering
+apply complete answer <----------------------- copy complete answer
+
+              ICE checks and DTLS handshake
+              data channel and video flow peer-to-peer
 ```
 
-Candidates are trickled as they are discovered. Each automated probe runs for seven seconds after the offer is created, then both sides collect final statistics.
+Gathering waits for `iceGatheringState === "complete"` with a 15-second limit. A timed-out payload includes candidates gathered so far and records `iceComplete: false`.
 
-## Manual signaling
+The answer is accepted only when its session identifier and ICE strategy match the current offer. Resetting or leaving the route closes the peer connection, data channel, generated media tracks, polling interval, event handlers, and pending work.
 
-Manual mode replaces every message in the middle column with two copied base64url values. It waits for gathering and embeds candidates in SDP instead of trickling them.
+## ICE strategies
 
-Loading `/manual` suppresses WebSocket creation entirely. The page still fetches `/config` because both browsers need the same STUN configuration. The legacy `/?manual=1` URL redirects to `/manual`.
+| Strategy | `iceServers` | Expected candidates |
+| --- | --- | --- |
+| LAN only | empty | host, possibly peer-reflexive |
+| STUN only | configured public STUN URLs | host, server-reflexive, possibly peer-reflexive |
 
-See [Manual signaling protocol](manual-signaling.md).
+No TURN server is configured. A restrictive NAT or firewall may therefore prevent either strategy from connecting.
 
-## Data-channel probe
+## Diagnostic data
 
-The offerer creates an ordered data channel named `diagnostic`. After it opens:
+Each browser records:
 
-1. The offerer sends three JSON ping messages, 250 ms apart.
-2. Each message contains a sequence number and the offerer's `performance.now()` timestamp.
-3. The answerer echoes the timestamp unchanged.
-4. The offerer measures application-level round-trip time using its own monotonic clock.
+- connection, ICE, gathering, and SDP signaling states
+- local and remote candidate counts by type
+- selected local and remote candidate details
+- current candidate-pair round-trip time when available
+- data-channel state and ping round-trip samples
+- inbound and outbound video byte and packet counts
+- state history and browser errors
 
-This confirms more than ICE state alone. It proves that DTLS, SCTP, data-channel negotiation, and bidirectional application data work.
+Reports stay in the browser. The only application-server request made by the diagnostic controller is the configuration fetch.
 
-## Media probe
+## Deployment properties
 
-The offerer creates a 320x180 canvas animation and captures it at 10 frames per second. This avoids camera and screen-capture permissions while exercising a real video sender.
+The Nitro production output and Vite development adapter share the same HTTP middleware for `/config` and `/health`. Vercel can create, stop, or route requests among function instances without invalidating a diagnostic because all peer state lives in the two browser tabs.
 
-The answerer reports media success only when at least one of these is true:
+Production should provide HTTPS and allow outbound access to the configured STUN endpoints. Both devices must be able to reach the deployed page, but they do not need to reach the same application instance.
 
-- The video track becomes unmuted.
-- `requestVideoFrameCallback()` observes a decoded frame.
-- Inbound RTP reports non-zero `bytesReceived` or `framesDecoded`.
+## Testing
 
-The report also includes outbound video bytes and encoded frame counts when the browser exposes them.
+- Contract tests cover candidate classification.
+- Codec tests cover round-trip encoding, version checks, correlation fields, and defensive limits.
+- Built-server tests verify the two pages and stateless HTTP endpoints.
+- Browser tests verify the overview-to-diagnostic journey and cleanup across client-side navigation.
 
-## Candidate types
-
-| Type | Meaning |
-| --- | --- |
-| `host` | An interface address or browser-generated mDNS host name |
-| `srflx` | A server-reflexive address learned through STUN |
-| `prflx` | A peer-reflexive address discovered during connectivity checks |
-| `relay` | A relayed address; not expected because this deployment has no TURN configuration |
-
-Candidate gathering is not candidate selection. A test can gather an `srflx` candidate and still select a host pair. Use `selectedPair`, not candidate counts, to determine the path that carried traffic.
-
-## Selected-pair discovery
-
-icecheck reads `RTCPeerConnection.getStats()` and first checks the transport report's `selectedCandidatePairId`. As a compatibility fallback, it finds a nominated or selected candidate-pair report in the `succeeded` state.
-
-It then resolves `localCandidateId` and `remoteCandidateId` and records fields browsers commonly expose:
-
-- `candidateType`
-- `protocol`
-- `address` or `ip`
-- `port`
-- `networkType`
-- `currentRoundTripTime`
-- `availableOutgoingBitrate`
-
-Browser privacy protections can redact addresses and network types. The connection-state and candidate-type fields remain the more portable signals.
-
-## Failure boundaries
-
-```text
-page/config failure
-  -> HTTP, HTTPS, origin, or deployment
-
-WebSocket failure
-  -> reverse-proxy upgrade handling or signaling server
-
-offer/answer failure
-  -> signaling ordering, malformed SDP, or browser compatibility
-
-no srflx candidate
-  -> configured STUN DNS/reachability or NAT behavior
-
-ICE failed
-  -> no mutually reachable direct candidate pair; no relay is configured
-
-ICE connected, data closed
-  -> DTLS/SCTP/data-channel negotiation
-
-data open, video zero bytes
-  -> RTP, codec, sender, receiver, or decode behavior
-```
-
-## Deployment requirements
-
-- Bind the Node server to a reachable interface such as `0.0.0.0`.
-- Use HTTPS for normal browser security-context behavior.
-- Forward WebSocket upgrades for `/signal` when using server-assisted mode.
-- The deployment is intentionally STUN-only, so both browsers must have a mutually reachable direct ICE path.
-- A reverse proxy for the web app does not relay WebRTC media.
-
-Manual-only mode does not require WebSocket forwarding, but it still requires both browsers to load the application and `/config`.
-
-## Source map
-
-- [`vite.config.ts`](../vite.config.ts): TanStack Start SPA configuration and development runtime attachment
-- [`standalone-server.mjs`](../standalone-server.mjs): direct Node static SPA host
-- [`server/diagnostic-runtime.ts`](../server/diagnostic-runtime.ts): direct Node HTTP and WebSocket adapter
-- [`server/signaling-broker.ts`](../server/signaling-broker.ts): transport-neutral rooms and signaling protocol
-- [`server/routes`](../server/routes): Nitro production HTTP and WebSocket routes
-- [`src/router.tsx`](../src/router.tsx): TanStack Router factory
-- [`src/routes`](../src/routes): URL and document-shell ownership
-- [`src/routes/(home)/-components/home-page.tsx`](<../src/routes/(home)/-components/home-page.tsx>): mode chooser used only by the root route
-- [`src/modules/icecheck/components/assisted-diagnostic.tsx`](../src/modules/icecheck/components/assisted-diagnostic.tsx): assisted room journey shared by `/session` and `/room/$roomCode`
-- [`src/modules/icecheck/components/manual-diagnostic.tsx`](../src/modules/icecheck/components/manual-diagnostic.tsx): manual copy/paste journey
-- [`src/modules/icecheck/lib/icecheck-client.client.ts`](../src/modules/icecheck/lib/icecheck-client.client.ts): browser-only probe lifecycle, signaling modes, media/data tests, and statistics
-- [`src/modules/icecheck/lib/manual-codec.ts`](../src/modules/icecheck/lib/manual-codec.ts): versioned envelope encoding and strict structural validation
-- [`test/server.test.mjs`](../test/server.test.mjs): server, signaling relay, and envelope codec tests
+See [Manual signaling protocol](manual-signaling.md) for the exact envelope schema and operator state machine.

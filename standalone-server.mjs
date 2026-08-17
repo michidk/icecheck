@@ -25,13 +25,11 @@ app.use((request, response, next) => {
   response.sendFile(shellFile)
 })
 
-diagnostics.attach(server)
 server.listen(port, host, () => {
   console.log(`WebRTC tester is ready at http://${host}:${port}${basePath || '/'}`)
 })
 
-async function shutdown() {
-  await diagnostics.close()
+function shutdown() {
   server.close(() => process.exit(0))
   setTimeout(() => process.exit(0), 500).unref()
 }

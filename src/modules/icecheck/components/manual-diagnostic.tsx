@@ -1,10 +1,10 @@
 import { SiteHeader } from '../../../components/site-header'
-import { useIcecheckClient } from '../hooks/use-icecheck-client'
+import { useManualDiagnostic } from '../hooks/use-manual-diagnostic'
 import { ClientElements } from './client-elements'
 import { RuntimePanel } from './runtime-panel'
 
 export function ManualDiagnostic() {
-  useIcecheckClient()
+  useManualDiagnostic()
 
   return (
     <>
@@ -12,21 +12,21 @@ export function ManualDiagnostic() {
 
       <main data-icecheck-mode="manual">
         <section className="intro journey-intro">
-          <span className="eyebrow">Manual signaling</span>
-          <h1>Test without a signaling server</h1>
-          <p>WebRTC still requires an offer and answer, but you carry them between browsers as base64url text. This removes the signaling WebSocket and message relay from the experiment; the page still loads its STUN configuration over HTTP.</p>
+          <span className="eyebrow">Two-browser WebRTC diagnostic</span>
+          <h1>Exchange an offer and answer by hand</h1>
+          <p>Open this page in two browsers and carry the generated base64url payloads between them. The application server only supplies public STUN configuration; the browsers negotiate the WebRTC path directly.</p>
           <ol className="journey-steps" aria-label="Manual diagnostic steps">
-            <li><span>1</span>Create offer</li>
-            <li><span>2</span>Return answer</li>
-            <li><span>3</span>Inspect path</li>
+            <li><span>1</span>Browser A creates an offer</li>
+            <li><span>2</span>Browser B returns an answer</li>
+            <li><span>3</span>Both inspect the path</li>
           </ol>
         </section>
 
         <section id="manual-panel" className="panel manual-panel">
           <div className="section-header manual-heading">
             <div>
-              <h2>Exchange complete SDP by hand</h2>
-              <p>Non-trickle ICE waits for gathering, then embeds every discovered candidate in one offer or answer payload.</p>
+              <h2>Copy and paste the connection payloads</h2>
+              <p>Create an offer on one browser. Paste and process it on the other, then copy the generated answer back.</p>
             </div>
             <div className="manual-heading-actions">
               <span className="badge"><i /><span>non-trickle ICE</span></span>
@@ -82,7 +82,7 @@ export function ManualDiagnostic() {
           <p className="manual-warning"><strong>Security:</strong> base64url is not encryption. SDP can contain IP addresses, ICE credentials, codecs, and browser/network metadata. Share payloads only with the intended peer.</p>
         </section>
 
-        <RuntimePanel signalingDisabled />
+        <RuntimePanel />
       </main>
 
       <ClientElements />

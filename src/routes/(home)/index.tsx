@@ -4,8 +4,8 @@ import { HomePage } from './-components/home-page'
 export const Route = createFileRoute('/(home)/')({
   head: () => ({
     meta: [
-      { title: 'Choose a WebRTC diagnostic · icecheck' },
-      { name: 'description', content: 'Choose assisted room signaling or a manual copy-and-paste WebRTC diagnostic.' },
+      { title: 'WebRTC connectivity diagnostic · icecheck' },
+      { name: 'description', content: 'Test a native WebRTC connection between two browsers using a manual copy-and-paste exchange.' },
     ],
   }),
   component: HomePage,

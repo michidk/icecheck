@@ -4,8 +4,8 @@ import { ManualDiagnostic } from '../../modules/icecheck/components/manual-diagn
 export const Route = createFileRoute('/manual/')({
   head: () => ({
     meta: [
-      { title: 'Manual signaling diagnostic · icecheck' },
-      { name: 'description', content: 'Exchange complete base64url WebRTC offers and answers without a signaling server.' },
+      { title: 'WebRTC diagnostic · icecheck' },
+      { name: 'description', content: 'Exchange complete base64url WebRTC offers and answers between two browsers.' },
     ],
   }),
   component: ManualDiagnostic,

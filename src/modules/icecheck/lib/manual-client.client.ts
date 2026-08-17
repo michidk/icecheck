@@ -1,0 +1,425 @@
+import {
+  MANUAL_PROTOCOL_VERSION,
+  decodeSignalEnvelope,
+  encodeSignalEnvelope,
+  type ManualDescriptionKind,
+  type ManualSignalEnvelope,
+} from './manual-codec.ts'
+import { countCandidatesInSdp } from './diagnostic-report.ts'
+import type {
+  CandidateCounts,
+  CandidatePair,
+  CandidateSummary,
+  IceConfiguration,
+  Probe,
+  Strategy,
+} from './diagnostic-types.ts'
+import { collectProbeResult } from './probe-result.client.ts'
+import { createProbeSession, type ProbeSession } from './probe-session.client.ts'
+
+export interface ManualDiagnosticController {
+  dispose(): void
+}
+
+type AppElement = HTMLElement & {
+  disabled: boolean
+  value: string
+}
+
+const MANUAL_GATHER_TIMEOUT_MS = 15_000
+const BASE_PATH = import.meta.env.BASE_URL.replace(/\/$/u, '')
+
+const $ = <ElementType extends Element = AppElement>(selector: string): ElementType => {
+  const element = document.querySelector<ElementType>(selector)
+  if (!element) throw new Error(`Missing required element: ${selector}`)
+  return element
+}
+
+let activeController: ManualDiagnosticController | undefined
+
+export function mountManualDiagnostic(): ManualDiagnosticController {
+  activeController?.dispose()
+  let disposed = false
+  let configuration: IceConfiguration = { stunServers: [] }
+  let configurationLoaded = false
+  let probe: ProbeSession | undefined
+  let monitor: ReturnType<typeof setInterval> | undefined
+  let busy = false
+  let toastTimer: ReturnType<typeof setTimeout> | undefined
+  const abort = new AbortController()
+  const cleanups: (() => void)[] = []
+
+  const strategies: Strategy[] = [
+    {
+      id: 'lan',
+      name: 'No ICE server',
+      path: 'host / prflx',
+      config: () => ({ iceServers: [], iceTransportPolicy: 'all' }),
+    },
+    {
+      id: 'stun',
+      name: 'STUN configured',
+      path: 'host / srflx / prflx',
+      config: () => ({ iceServers: configuration.stunServers, iceTransportPolicy: 'all' }),
+    },
+  ]
+
+  const controller: ManualDiagnosticController = {
+    dispose() {
+      if (disposed || activeController !== controller) return
+      disposed = true
+      abort.abort()
+      for (const cleanup of cleanups.splice(0)) cleanup()
+      clearTimeout(toastTimer)
+      cleanupProbe()
+      activeController = undefined
+    },
+  }
+  activeController = controller
+  bindControls()
+  renderEnvironment()
+  void initialize()
+  return controller
+
+  async function initialize() {
+    try {
+      const response = await fetch(appPath('config'), { cache: 'no-store', signal: abort.signal })
+      if (!response.ok) throw new Error(`ICE configuration request failed with HTTP ${response.status}.`)
+      configuration = parseIceConfiguration(await response.json())
+    } catch (error: unknown) {
+      if (disposed || isAbortError(error)) return
+      showFailure(error)
+    } finally {
+      if (!disposed) {
+        configurationLoaded = true
+        renderEnvironment()
+        syncControls()
+      }
+    }
+  }
+
+  function renderEnvironment() {
+    $('#secure-context').textContent = window.isSecureContext ? 'true' : 'false'
+    $('#secure-context').style.color = window.isSecureContext ? 'var(--good)' : 'var(--warn)'
+    $('#secure-detail').textContent = location.protocol === 'https:' ? 'HTTPS' : `${location.protocol} (diagnostics still work)`
+
+    const supported = typeof RTCPeerConnection !== 'undefined'
+    $('#webrtc-status').textContent = supported ? 'available' : 'unavailable'
+    $('#webrtc-status').style.color = supported ? 'var(--good)' : 'var(--bad)'
+    $('#browser-detail').textContent = `${browserName()} · ${navigator.platform || 'unknown platform'}`
+
+    const stunUrls = configuration.stunServers.flatMap(({ urls }) => Array.isArray(urls) ? urls : [urls])
+    $('#stun-status').textContent = configurationLoaded ? `${stunUrls.length} endpoint${stunUrls.length === 1 ? '' : 's'}` : 'loading'
+    $('#stun-status').style.color = stunUrls.length ? 'var(--good)' : 'var(--warn)'
+    $('#stun-detail').textContent = stunUrls.join(', ') || (configurationLoaded ? 'none' : 'fetching /config')
+  }
+
+  async function createOffer() {
+    if (busy || !configurationLoaded) return
+    setBusy(true, 'Gathering offer ICE…')
+    cleanupProbe()
+    $('#manual-remote-payload').value = ''
+    try {
+      const strategy = getSelectedStrategy()
+      const session = createProbe(strategy, makeId(), true)
+      probe = session
+      startMonitor(session)
+      const offer = await session.pc.createOffer()
+      await session.pc.setLocalDescription(offer)
+      const iceComplete = await session.waitForGathering(MANUAL_GATHER_TIMEOUT_MS)
+      if (disposed || probe !== session) return
+      setLocalPayload(makeEnvelope('offer', session, iceComplete))
+    } catch (error: unknown) {
+      showFailure(error)
+    } finally {
+      setBusy(false)
+      updateStatus(probe)
+    }
+  }
+
+  async function processPayload() {
+    if (busy || !configurationLoaded) return
+    setBusy(true, 'Processing payload…')
+    try {
+      const envelope = decodeSignalEnvelope($('#manual-remote-payload').value)
+      if (envelope.kind === 'offer') await acceptOffer(envelope)
+      else await applyAnswer(envelope)
+    } catch (error: unknown) {
+      showFailure(error)
+    } finally {
+      setBusy(false)
+      updateStatus(probe)
+    }
+  }
+
+  async function acceptOffer(envelope: ManualSignalEnvelope) {
+    cleanupProbe()
+    const strategy = strategies.find(({ id }) => id === envelope.strategyId)
+    if (!strategy) throw new Error('The offer uses an unsupported ICE strategy.')
+    $('#manual-strategy').value = strategy.id
+    const session = createProbe(strategy, envelope.sessionId, false)
+    probe = session
+    session.remoteCandidates = countCandidatesInSdp(envelope.description.sdp)
+    startMonitor(session)
+    await session.pc.setRemoteDescription(envelope.description)
+    const answer = await session.pc.createAnswer()
+    await session.pc.setLocalDescription(answer)
+    const iceComplete = await session.waitForGathering(MANUAL_GATHER_TIMEOUT_MS)
+    if (disposed || probe !== session) return
+    setLocalPayload(makeEnvelope('answer', session, iceComplete))
+  }
+
+  async function applyAnswer(envelope: ManualSignalEnvelope) {
+    if (!probe?.initiator) throw new Error('Create an offer on this browser before applying an answer.')
+    if (envelope.sessionId !== probe.testId) throw new Error('This answer belongs to a different manual session.')
+    if (envelope.strategyId !== probe.strategy.id) throw new Error('The answer uses a different ICE strategy.')
+    if (probe.pc.remoteDescription) throw new Error('An answer has already been applied to this session.')
+    probe.remoteCandidates = countCandidatesInSdp(envelope.description.sdp)
+    await probe.pc.setRemoteDescription(envelope.description)
+    $('#manual-local-meta').textContent = `offer · answer applied · ${$('#manual-local-payload').value.length} chars`
+    await refreshReport(probe)
+  }
+
+  function createProbe(strategy: Strategy, testId: string, initiator: boolean): ProbeSession {
+    return createProbeSession({
+      delay,
+      initiator,
+      onUpdate: updateStatus,
+      strategy,
+      testId,
+      video: $<HTMLVideoElement>('#probe-video'),
+    })
+  }
+
+  function makeEnvelope(kind: ManualDescriptionKind, session: Probe, iceComplete: boolean): ManualSignalEnvelope {
+    const description = session.pc.localDescription
+    if (!description?.sdp || (description.type !== 'offer' && description.type !== 'answer')) {
+      throw new Error('The browser did not create a complete local session description.')
+    }
+    return {
+      version: MANUAL_PROTOCOL_VERSION,
+      kind,
+      sessionId: session.testId,
+      strategyId: session.strategy.id,
+      createdAt: new Date().toISOString(),
+      iceComplete,
+      description: { type: description.type, sdp: description.sdp },
+    }
+  }
+
+  function setLocalPayload(envelope: ManualSignalEnvelope) {
+    const encoded = encodeSignalEnvelope(envelope)
+    $('#manual-local-payload').value = encoded
+    $('#manual-local-meta').textContent = `${envelope.kind} · ${encoded.length} chars · ICE ${envelope.iceComplete ? 'complete' : 'timed out'}`
+    syncControls()
+  }
+
+  function startMonitor(session: ProbeSession) {
+    clearInterval(monitor)
+    updateStatus(session)
+    void refreshReport(session)
+    monitor = setInterval(() => { void refreshReport(session) }, 1_000)
+  }
+
+  async function refreshReport(session: ProbeSession) {
+    if (disposed || session !== probe || session.pc.connectionState === 'closed') return
+    const result = await collectProbeResult(session)
+    if (disposed || session !== probe) return
+    const manualResult = {
+      mode: 'manual-non-trickle',
+      protocolVersion: MANUAL_PROTOCOL_VERSION,
+      sessionId: session.testId,
+      strategyId: session.strategy.id,
+      role: session.initiator ? 'offerer' : 'answerer',
+      sampledAt: new Date().toISOString(),
+      result,
+    }
+    $('#manual-report').textContent = JSON.stringify(manualResult, null, 2)
+    $('#manual-selected-pair').textContent = result.selectedPair ? formatDetailedPair(result.selectedPair) : 'none'
+    updateStatus(session)
+  }
+
+  function updateStatus(session: Probe | undefined) {
+    if (!session || session !== probe || disposed) return
+    $('#manual-role').textContent = session.initiator ? 'offerer' : 'answerer'
+    $('#manual-strategy-status').textContent = `${session.strategy.id} (${session.strategy.path})`
+    $('#manual-connection').textContent = session.pc.connectionState
+    $('#manual-ice').textContent = session.pc.iceConnectionState
+    $('#manual-gathering').textContent = session.pc.iceGatheringState
+    $('#manual-data').textContent = session.channel?.readyState || 'not created'
+    $('#manual-video').textContent = session.videoReceived ? 'bytes received' : session.videoNegotiated ? 'negotiated' : session.mediaSupported ? 'sending synthetic track' : 'not negotiated'
+    $('#manual-local-candidates').textContent = formatCandidateCounts(session.localCandidates)
+    $('#manual-remote-candidates').textContent = formatCandidateCounts(session.remoteCandidates)
+  }
+
+  function reset() {
+    cleanupProbe()
+    $('#manual-local-payload').value = ''
+    $('#manual-remote-payload').value = ''
+    $('#manual-local-meta').textContent = 'Create or accept an offer first.'
+    $('#manual-role').textContent = 'idle'
+    $('#manual-strategy-status').textContent = 'none'
+    $('#manual-connection').textContent = 'new'
+    $('#manual-ice').textContent = 'new'
+    $('#manual-gathering').textContent = 'new'
+    $('#manual-data').textContent = 'closed'
+    $('#manual-video').textContent = 'not negotiated'
+    $('#manual-local-candidates').textContent = 'none'
+    $('#manual-remote-candidates').textContent = 'none'
+    $('#manual-selected-pair').textContent = 'none'
+    $('#manual-report').textContent = 'No manual connection is active.'
+    syncControls()
+  }
+
+  function cleanupProbe() {
+    clearInterval(monitor)
+    monitor = undefined
+    probe?.destroy()
+    probe = undefined
+  }
+
+  function setBusy(nextBusy: boolean, label = '') {
+    busy = nextBusy
+    if (disposed) return
+    if (label) $('#manual-report').textContent = label
+    syncControls()
+  }
+
+  function syncControls() {
+    if (disposed) return
+    $('#manual-create-offer').disabled = busy || !configurationLoaded
+    $('#manual-process-payload').disabled = busy || !configurationLoaded || !$('#manual-remote-payload').value.trim()
+    $('#manual-copy-payload').disabled = !$('#manual-local-payload').value
+  }
+
+  function showFailure(error: unknown) {
+    if (disposed) return
+    const message = errorMessage(error, 'Manual signaling failed.')
+    $('#manual-report').textContent = JSON.stringify({ error: message, at: new Date().toISOString() }, null, 2)
+    showToast(message)
+  }
+
+  function showToast(message: string) {
+    if (disposed) return
+    const toast = $('#toast')
+    toast.textContent = message
+    toast.classList.add('show')
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2_800)
+  }
+
+  function bindControls() {
+    listen($('#manual-create-offer'), 'click', () => { void createOffer() })
+    listen($('#manual-process-payload'), 'click', () => { void processPayload() })
+    listen($('#manual-reset'), 'click', reset)
+    listen($('#manual-remote-payload'), 'input', syncControls)
+    listen($('#manual-copy-payload'), 'click', () => {
+      void copyText($('#manual-local-payload').value, 'Manual signaling payload copied.')
+    })
+    listen($('#manual-copy-report'), 'click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      void copyText($('#manual-report').textContent || '', 'Manual probe report copied.')
+    })
+  }
+
+  function listen(target: EventTarget, type: string, listener: EventListener) {
+    target.addEventListener(type, listener)
+    cleanups.push(() => target.removeEventListener(type, listener))
+  }
+
+  async function copyText(text: string, confirmation: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const area = document.createElement('textarea')
+      area.value = text
+      document.body.append(area)
+      area.select()
+      document.execCommand('copy')
+      area.remove()
+    }
+    if (disposed) return
+    showToast(confirmation)
+  }
+
+  function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (abort.signal.aborted) return resolve()
+      const timer = setTimeout(finish, ms)
+      abort.signal.addEventListener('abort', finish, { once: true })
+      function finish() {
+        clearTimeout(timer)
+        abort.signal.removeEventListener('abort', finish)
+        resolve()
+      }
+    })
+  }
+
+  function getSelectedStrategy(): Strategy {
+    const strategy = strategies.find(({ id }) => id === $('#manual-strategy').value)
+    if (!strategy) throw new Error('Select a supported ICE strategy.')
+    return strategy
+  }
+}
+
+function appPath(pathname = ''): string {
+  return `${BASE_PATH}/${pathname.replace(/^\/+/, '')}` || '/'
+}
+
+function parseIceConfiguration(value: unknown): IceConfiguration {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('ICE configuration must be an object.')
+  const stunServers = (value as { stunServers?: unknown }).stunServers
+  if (!Array.isArray(stunServers)) throw new Error('ICE configuration must contain a STUN server list.')
+  return {
+    stunServers: stunServers.map((server) => {
+      if (!server || typeof server !== 'object' || Array.isArray(server)) throw new Error('ICE server entries must be objects.')
+      const urls = (server as { urls?: unknown }).urls
+      const values = Array.isArray(urls) ? urls : [urls]
+      if (!values.length || values.some((url) => typeof url !== 'string' || !/^stuns?:/iu.test(url))) {
+        throw new Error('ICE server entries may contain only STUN URLs.')
+      }
+      return { urls: values as string[] } satisfies RTCIceServer
+    }),
+  }
+}
+
+function browserName() {
+  const ua = navigator.userAgent
+  if (/Edg\//u.test(ua)) return 'Edge'
+  if (/Firefox\//u.test(ua)) return 'Firefox'
+  if (/Chrome\//u.test(ua) && !/Edg\//u.test(ua)) return 'Chrome'
+  if (/Safari\//u.test(ua) && !/Chrome\//u.test(ua)) return 'Safari'
+  return 'Unknown browser'
+}
+
+function formatDetailedPair(pair: CandidatePair): string {
+  const format = (candidate?: CandidateSummary) => {
+    if (!candidate) return '?'
+    const endpoint = candidate.address && candidate.port ? ` ${candidate.address}:${candidate.port}` : ''
+    const transport = candidate.protocol ? `/${candidate.protocol}` : ''
+    const relay = candidate.relayProtocol ? ` relay=${candidate.relayProtocol}` : ''
+    return `${candidate.type || '?'}${transport}${endpoint}${relay}`
+  }
+  return `${format(pair.local)} -> ${format(pair.remote)}${Number.isFinite(pair.currentRoundTripTimeMs) ? ` · ${pair.currentRoundTripTimeMs} ms` : ''}`
+}
+
+function formatCandidateCounts(counts: CandidateCounts): string {
+  const values = Object.entries(counts).filter(([, count]) => count > 0).map(([type, count]) => `${type}:${count}`)
+  return values.join(' ') || 'none'
+}
+
+function makeId() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const bytes = new Uint32Array(4)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (value) => value.toString(16)).join('-')
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}

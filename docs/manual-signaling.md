@@ -1,22 +1,20 @@
 # Manual signaling protocol
 
-This document specifies icecheck's copy/paste signaling mode. It is intended to be readable enough to reproduce with another implementation.
+This document specifies icecheck's copy/paste signaling workflow. It is intended to be readable enough to reproduce with another implementation.
 
 ## Purpose
 
 WebRTC does not define a signaling transport. A WebSocket, HTTP endpoint, QR code, terminal, email, or clipboard can all carry the same offer and answer.
 
-Manual mode removes the WebSocket relay from the experiment. It lets developers answer this question:
+The copy/paste workflow lets developers answer this question:
 
 > Can these two browsers establish the selected WebRTC path when the SDP is exchanged correctly by hand?
 
-If manual mode succeeds while server-assisted mode fails, investigate the WebSocket proxy and signaling implementation. If both fail identically, investigate ICE, NAT, firewall, and STUN behavior.
-
-Open `/manual` on both browsers. The root page links to this route as **Manual copy/paste**; it is intentionally separate from the assisted room journey.
+Open `/manual` on both browsers, or use **Start diagnostic** from the overview page.
 
 ## Browser APIs used
 
-Manual mode uses only native browser APIs:
+The diagnostic uses only native browser APIs:
 
 ```js
 const pc = new RTCPeerConnection(rtcConfiguration)
@@ -38,7 +36,7 @@ await pc.setLocalDescription(await pc.createAnswer())
 
 ## Why non-trickle ICE is required
 
-Normal server-assisted WebRTC commonly sends the initial SDP immediately and then sends each ICE candidate as it is discovered. This is called trickle ICE.
+WebRTC applications commonly send the initial SDP immediately and then send each ICE candidate as it is discovered. This is called trickle ICE.
 
 Clipboard signaling has no persistent channel for later candidates. icecheck therefore waits until ICE gathering completes before copying `pc.localDescription`. At that point, the browser has inserted gathered candidates into the SDP.
 
