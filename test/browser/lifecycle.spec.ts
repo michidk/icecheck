@@ -3,8 +3,8 @@ import type { Page } from '@playwright/test'
 
 test('the home page is a ready manual diagnostic', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: /Test the real WebRTC path between two browsers/ })).toBeVisible()
-  await expect(page.getByRole('link', { name: /View on GitHub/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Find where a peer connection fails/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /GitHub/ })).toBeVisible()
   await expect(page.locator('#stun-status')).toHaveText(/endpoint/)
   await expect(page.locator('#manual-create-offer')).toBeEnabled()
   await expect(page.locator('#manual-process-payload')).toBeDisabled()

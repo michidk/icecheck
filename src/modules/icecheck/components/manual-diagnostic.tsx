@@ -13,8 +13,9 @@ export function ManualDiagnostic() {
       <main className="diagnostic-page" data-icecheck-mode="manual">
         <section className="diagnostic-hero">
           <div className="hero-copy">
-            <h1>Test the real WebRTC path between two browsers.</h1>
-            <p>icecheck establishes a direct browser-to-browser connection, then shows the ICE candidates, selected network path, data-channel latency, and video transport that actually work.</p>
+            <span className="eyebrow">Native WebRTC diagnostics</span>
+            <h1>Find where a peer connection fails</h1>
+            <p>Connect two browsers, compare direct ICE paths with and without STUN, and inspect the selected candidate pair, state transitions, data-channel RTT, and synthetic-video stats.</p>
           </div>
           <ol className="quick-guide" aria-label="How the diagnostic works">
             <li><span>01</span><div><strong>Open twice</strong><small>Load this page in both browsers.</small></div></li>

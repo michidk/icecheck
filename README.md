@@ -2,6 +2,11 @@
 
 `icecheck` is a developer tool for testing whether two browsers can establish a direct WebRTC connection. It gathers ICE candidates, opens a data channel, sends synthetic video, and exposes the selected candidate pair and connection statistics.
 
+<picture>
+  <source media="(max-width: 640px)" srcset=".github/screenshots/icecheck-mobile.png">
+  <img alt="icecheck manual WebRTC diagnostic" src=".github/screenshots/icecheck-desktop.png">
+</picture>
+
 The offer and answer are exchanged by copy and paste or the browser's native share sheet. There are no rooms, WebSockets, or process-local connection registries, so the application is compatible with stateless deployments such as Vercel Functions.
 
 ## What it tests
@@ -42,7 +47,9 @@ The development server defaults to `http://localhost:4173`. Open the root page i
 4. Read the verdict, then inspect connection state, candidate counts, selected pair, data-channel state, video state, and the JSON report on both browsers.
 5. Use **Start over** before starting another exchange.
 
-Each base64url payload contains a complete session description. icecheck waits for non-trickle ICE gathering before encoding it, so no persistent signaling channel is needed. See [the manual signaling protocol](docs/manual-signaling.md) for the schema and state machine.
+Each base64url payload contains a complete session description. icecheck waits for non-trickle ICE gathering before encoding it, so no persistent signaling channel is needed. Payloads are versioned JSON envelopes containing the role, ICE strategy, SDP type, and SDP body; malformed, mismatched, oversized, and replayed payloads are rejected.
+
+The negotiation sequence is deliberately small: the offerer creates a complete offer, the answerer validates and applies it before creating a complete answer, and the offerer validates and applies that answer. A reset or unmount closes peer connections, tracks, channels, timers, listeners, and pending work before another exchange begins.
 
 ## Configuration
 
@@ -101,7 +108,7 @@ test/
   server.test.mjs             Built-server and codec integration coverage
 ```
 
-The root route imports the feature's public React component. Browser-only WebRTC code is dynamically loaded by the feature hook and disposed whenever the route unmounts. See [Architecture](docs/architecture.md) for the boundaries and negotiation flow, and [AGENTS.md](AGENTS.md) for contributor guidance.
+The root route imports the feature's public React component. Browser-only WebRTC code is dynamically loaded by the feature hook and disposed whenever the route unmounts. See [AGENTS.md](AGENTS.md) for contributor guidance and module boundaries.
 
 ## Verification
 
