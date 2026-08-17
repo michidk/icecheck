@@ -10,7 +10,7 @@ The copy/paste workflow lets developers answer this question:
 
 > Can these two browsers establish the selected WebRTC path when the SDP is exchanged correctly by hand?
 
-Open `/manual` on both browsers, or use **Start diagnostic** from the overview page.
+Open `/manual` on both browsers, or use **Open diagnostic** from the overview page.
 
 ## Browser APIs used
 
@@ -148,9 +148,9 @@ Validation checks structure, not trust. The remote SDP is still untrusted input 
 
 `iceServers` is empty and `iceTransportPolicy` is `all`. The payload normally contains host candidates only. Browsers may use mDNS names rather than literal local IP addresses.
 
-### STUN only
+### STUN-assisted
 
-The configured STUN service can add server-reflexive (`srflx`) candidates. Host candidates remain permitted. Inspect `selected_pair` to see which type actually won.
+The configured STUN service can add server-reflexive (`srflx`) candidates. Host candidates remain permitted, so this is not a STUN-only transport policy. Inspect the selected candidate pair to see which type actually won.
 
 No TURN server is configured. Manual tests therefore succeed only when the browsers can form a direct host or server-reflexive path.
 

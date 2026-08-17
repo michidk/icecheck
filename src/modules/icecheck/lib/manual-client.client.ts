@@ -52,13 +52,13 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
   const strategies: Strategy[] = [
     {
       id: 'lan',
-      name: 'No ICE server',
+      name: 'LAN only',
       path: 'host / prflx',
       config: () => ({ iceServers: [], iceTransportPolicy: 'all' }),
     },
     {
       id: 'stun',
-      name: 'STUN configured',
+      name: 'STUN-assisted',
       path: 'host / srflx / prflx',
       config: () => ({ iceServers: configuration.stunServers, iceTransportPolicy: 'all' }),
     },
@@ -242,7 +242,7 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
   function updateStatus(session: Probe | undefined) {
     if (!session || session !== probe || disposed) return
     $('#manual-role').textContent = session.initiator ? 'offerer' : 'answerer'
-    $('#manual-strategy-status').textContent = `${session.strategy.id} (${session.strategy.path})`
+    $('#manual-strategy-status').textContent = `${session.strategy.name} (${session.strategy.path})`
     $('#manual-connection').textContent = session.pc.connectionState
     $('#manual-ice').textContent = session.pc.iceConnectionState
     $('#manual-gathering').textContent = session.pc.iceGatheringState
@@ -256,7 +256,7 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
     cleanupProbe()
     $('#manual-local-payload').value = ''
     $('#manual-remote-payload').value = ''
-    $('#manual-local-meta').textContent = 'Create or accept an offer first.'
+    $('#manual-local-meta').textContent = 'Nothing generated yet'
     $('#manual-role').textContent = 'idle'
     $('#manual-strategy-status').textContent = 'none'
     $('#manual-connection').textContent = 'new'
@@ -281,6 +281,9 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
   function setBusy(nextBusy: boolean, label = '') {
     busy = nextBusy
     if (disposed) return
+    $('#manual-panel').setAttribute('aria-busy', String(busy))
+    $('#manual-create-offer').textContent = busy && label.includes('offer') ? 'Gathering ICE…' : 'Create offer'
+    $('#manual-process-payload').textContent = busy && !label.includes('offer') ? 'Applying…' : 'Apply inbound payload'
     if (label) $('#manual-report').textContent = label
     syncControls()
   }
@@ -290,6 +293,9 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
     $('#manual-create-offer').disabled = busy || !configurationLoaded
     $('#manual-process-payload').disabled = busy || !configurationLoaded || !$('#manual-remote-payload').value.trim()
     $('#manual-copy-payload').disabled = !$('#manual-local-payload').value
+    $('#manual-reset').disabled = busy
+    $('#manual-strategy').disabled = busy
+    $('#manual-remote-payload').disabled = busy
   }
 
   function showFailure(error: unknown) {
@@ -314,7 +320,7 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
     listen($('#manual-reset'), 'click', reset)
     listen($('#manual-remote-payload'), 'input', syncControls)
     listen($('#manual-copy-payload'), 'click', () => {
-      void copyText($('#manual-local-payload').value, 'Manual signaling payload copied.')
+      void copyText($('#manual-local-payload').value, 'Outbound payload copied.')
     })
     listen($('#manual-copy-report'), 'click', (event) => {
       event.preventDefault()

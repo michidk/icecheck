@@ -69,12 +69,12 @@ test('serves the manual diagnostic UI and ICE configuration', async () => {
     { stunServers: [{ urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }] },
   );
   assert.deepEqual([homeResponse.status, manualResponse.status], [200, 200]);
-  assert.match(home, /Find whether two browsers can establish a direct peer connection/);
-  assert.match(home, /Stateless deployment with no server coordination/);
-  assert.match(home, /Start diagnostic/);
-  assert.match(manual, /Exchange an offer and answer by hand/);
-  assert.match(manual, /base64url is not encryption/);
-  assert.match(manual, /Browser A creates an offer/);
+  assert.match(home, /Debug ICE, STUN &amp; WebRTC/);
+  assert.match(home, /The offer and answer move through your clipboard/);
+  assert.match(home, /Open diagnostic/);
+  assert.match(manual, /Debug a WebRTC connection/);
+  assert.match(manual, /Base64url is encoding, not encryption/);
+  assert.match(manual, /Start or answer a connection/);
   assert.doesNotMatch(manual, /signaling_websocket/);
 });
 

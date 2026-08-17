@@ -6,8 +6,8 @@ export function SiteHeader({ label, showHomeLink = true }: { label: string; show
       <Link className="brand" to="/">icecheck</Link>
       <div className="site-header-meta">
         <span>{label}</span>
-        {showHomeLink ? <Link to="/">overview</Link> : null}
-        <a href="https://github.com/michidk/icecheck" target="_blank" rel="noreferrer">GitHub ↗</a>
+        {showHomeLink ? <Link to="/">Overview</Link> : null}
+        <a href="https://github.com/michidk/icecheck" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
       </div>
     </header>
   )

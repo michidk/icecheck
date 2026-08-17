@@ -7,8 +7,9 @@ icecheck is a stateless TanStack Start SPA with a browser-only WebRTC diagnostic
 ```text
 routes                    icecheck feature                  platform adapters
 ------                    ----------------                  -----------------
-/ overview  ----------->  public React components
-/manual     ----------->  lifecycle hook
+/ overview                route-owned overview UI
+/manual     ----------->  public diagnostic component
+                           lifecycle hook
                            manual controller  ----------->  native browser WebRTC
                            codec + reports
 
@@ -17,7 +18,8 @@ browser GET /health  ------------------------------------>  Nitro or Vite HTTP a
 ```
 
 - Route files own URLs, metadata, and page composition.
-- `src/modules/icecheck/components` is the feature's public UI boundary.
+- The overview UI is route-owned under `src/routes/(home)/-components`.
+- `src/modules/icecheck/components` is the reusable diagnostic feature's public UI boundary.
 - `hooks/use-manual-diagnostic.ts` loads browser code only after hydration and disposes it on route unmount.
 - `lib/manual-client.client.ts` coordinates the UI state machine.
 - `lib/probe-session.client.ts` owns the lifetime of `RTCPeerConnection`, data channels, tracks, and timers.
@@ -25,7 +27,7 @@ browser GET /health  ------------------------------------>  Nitro or Vite HTTP a
 - `lib/manual-codec.ts` owns the versioned copy/paste envelope and defensive validation.
 - Server code does not import browser feature internals.
 
-The architecture checker enforces the route-to-feature and server-to-client import boundaries.
+The architecture checker enforces the route-to-feature and server-to-client import boundaries. Route pages use folder-based `index.tsx` files, route-private code uses the `-` ignore prefix, and generated `src/routeTree.gen.ts` is not edited by hand.
 
 ## Routes and server surface
 
@@ -70,7 +72,7 @@ The answer is accepted only when its session identifier and ICE strategy match t
 | Strategy | `iceServers` | Expected candidates |
 | --- | --- | --- |
 | LAN only | empty | host, possibly peer-reflexive |
-| STUN only | configured public STUN URLs | host, server-reflexive, possibly peer-reflexive |
+| STUN-assisted | configured public STUN URLs | host, server-reflexive, possibly peer-reflexive |
 
 No TURN server is configured. A restrictive NAT or firewall may therefore prevent either strategy from connecting.
 

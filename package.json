@@ -1,5 +1,5 @@
 {
-  "name": "webrtc-path-tester",
+  "name": "icecheck",
   "version": "0.1.0",
   "description": "A TanStack Start SPA for two-device WebRTC connectivity diagnostics.",
   "license": "MIT",

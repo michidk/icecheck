@@ -1,6 +1,6 @@
-# icecheck
+# icecheck — WebRTC path debugger
 
-`icecheck` is a small TanStack Start application for testing whether two browsers can establish a native WebRTC connection. It gathers ICE candidates, opens a data channel, sends generated video, and exposes the selected candidate pair and connection statistics.
+`icecheck` is a developer tool for testing whether two browsers can establish a direct WebRTC connection. It gathers ICE candidates, opens a data channel, sends synthetic video, and exposes the selected candidate pair and connection statistics.
 
 The offer and answer are exchanged by copy and paste. There are no rooms, WebSockets, or process-local connection registries, so the application is compatible with stateless deployments such as Vercel Functions.
 
@@ -32,15 +32,15 @@ npm run build
 npm start
 ```
 
-Open `/manual` in two browsers or select **Start diagnostic** on the overview page.
+The development server defaults to `http://localhost:4173`. Open `/manual` in two browsers or select **Open diagnostic** on the overview page.
 
 ## Diagnostic workflow
 
-1. On browser A, select an ICE configuration and choose **Create offer**.
-2. Copy A's local payload into B's remote payload field and choose **Process remote payload**.
-3. Copy B's generated answer into A's remote payload field and process it.
+1. On browser A, select an ICE strategy and choose **Create offer**.
+2. Copy A's outbound payload into **Offer or answer to apply** on browser B and choose **Apply inbound payload**.
+3. Copy B's generated answer into the same field on browser A and apply it.
 4. Inspect connection state, candidate counts, selected pair, data-channel state, video state, and the JSON report on both browsers.
-5. Use **Reset** before starting another exchange.
+5. Use **Start over** before starting another exchange.
 
 Each base64url payload contains a complete session description. icecheck waits for non-trickle ICE gathering before encoding it, so no persistent signaling channel is needed. See [the manual signaling protocol](docs/manual-signaling.md) for the schema and state machine.
 
@@ -73,8 +73,8 @@ HTTPS is recommended for consistent browser security behavior. For phone testing
 
 | Observation | Likely meaning |
 | --- | --- |
-| LAN succeeds, STUN succeeds | The browsers found a direct path; inspect `selected_pair` to see which candidate type won |
-| LAN fails, STUN succeeds | Server-reflexive discovery was needed |
+| LAN succeeds, STUN-assisted succeeds | The browsers found a direct path; inspect `selected_pair` to see which candidate type won |
+| LAN fails, STUN-assisted succeeds | Server-reflexive discovery was needed |
 | Both fail | Candidate pairs were not mutually reachable, or local policy/firewall/browser support blocked negotiation |
 | ICE connects, data channel fails | Inspect SCTP/data-channel state and browser errors |
 | Data works, video does not | Inspect RTP stats, codec support, and generated-track support |
@@ -102,7 +102,7 @@ test/
   server.test.mjs             Built-server and codec integration coverage
 ```
 
-The route layer imports the feature's public React component. Browser-only WebRTC code is dynamically loaded by the feature hook and disposed whenever the route unmounts.
+The manual route imports the feature's public React component. Browser-only WebRTC code is dynamically loaded by the feature hook and disposed whenever the route unmounts. See [Architecture](docs/architecture.md) for the boundaries and negotiation flow, and [AGENTS.md](AGENTS.md) for contributor guidance.
 
 ## Verification
 
@@ -112,6 +112,8 @@ npm run test:e2e
 ```
 
 `verify` runs ESLint, architecture checks, TypeScript, the production build, and Node integration tests.
+
+The browser suite starts the development server automatically and expects Chromium to be installed (`npx playwright install chromium`). Set `E2E_BASE_URL` to run it against an existing deployment. Playwright output is kept under `.playwright/`.
 
 ## Security
 
