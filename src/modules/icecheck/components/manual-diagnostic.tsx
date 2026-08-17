@@ -105,6 +105,9 @@ export function ManualDiagnostic() {
             <div><dt>Peer connection</dt><dd id="manual-connection">new</dd></div>
             <div><dt>ICE connection</dt><dd id="manual-ice">new</dd></div>
             <div><dt>ICE gathering</dt><dd id="manual-gathering">new</dd></div>
+            <div><dt>STUN discovery</dt><dd id="manual-stun-result" className="stun-value">not started</dd></div>
+            <div><dt>STUN server</dt><dd id="manual-stun-server" className="stun-value">none</dd></div>
+            <div><dt>Selected path</dt><dd id="manual-stun-path" className="stun-value">waiting</dd></div>
             <div><dt>Data channel</dt><dd id="manual-data">closed</dd></div>
             <div><dt>Video track</dt><dd id="manual-video">not negotiated</dd></div>
             <div><dt>Local candidates</dt><dd id="manual-local-candidates">none</dd></div>

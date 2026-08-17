@@ -225,6 +225,7 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
     if (disposed || session !== probe || session.pc.connectionState === 'closed') return
     const result = await collectProbeResult(session)
     if (disposed || session !== probe) return
+    recordReportedStunUrls(session, result.selectedPair)
     const manualResult = {
       mode: 'manual-non-trickle',
       protocolVersion: MANUAL_PROTOCOL_VERSION,
@@ -232,10 +233,12 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
       strategyId: session.strategy.id,
       role: session.initiator ? 'offerer' : 'answerer',
       sampledAt: new Date().toISOString(),
+      stun: summarizeStun(session, result.selectedPair),
       result,
     }
     $('#manual-report').textContent = JSON.stringify(manualResult, null, 2)
     $('#manual-selected-pair').textContent = result.selectedPair ? formatDetailedPair(result.selectedPair) : 'none'
+    renderSelectedStunPath(result.selectedPair, result.connectionState)
     updateStatus(session)
   }
 
@@ -246,6 +249,7 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
     $('#manual-connection').textContent = session.pc.connectionState
     $('#manual-ice').textContent = session.pc.iceConnectionState
     $('#manual-gathering').textContent = session.pc.iceGatheringState
+    renderStunDiscovery(session)
     $('#manual-data').textContent = session.channel?.readyState || 'not created'
     $('#manual-video').textContent = session.videoReceived ? 'bytes received' : session.videoNegotiated ? 'negotiated' : session.mediaSupported ? 'sending synthetic track' : 'not negotiated'
     $('#manual-local-candidates').textContent = formatCandidateCounts(session.localCandidates)
@@ -262,6 +266,9 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
     $('#manual-connection').textContent = 'new'
     $('#manual-ice').textContent = 'new'
     $('#manual-gathering').textContent = 'new'
+    setStunValue('#manual-stun-result', 'not started')
+    setStunValue('#manual-stun-server', 'none')
+    setStunValue('#manual-stun-path', 'waiting')
     $('#manual-data').textContent = 'closed'
     $('#manual-video').textContent = 'not negotiated'
     $('#manual-local-candidates').textContent = 'none'
@@ -366,6 +373,83 @@ export function mountManualDiagnostic(): ManualDiagnosticController {
     const strategy = strategies.find(({ id }) => id === $('#manual-strategy').value)
     if (!strategy) throw new Error('Select a supported ICE strategy.')
     return strategy
+  }
+
+  function renderStunDiscovery(session: Probe) {
+    if (session.strategy.id === 'lan') {
+      setStunValue('#manual-stun-result', 'Not requested', 'neutral')
+      setStunValue('#manual-stun-server', 'None — LAN-only mode', 'neutral')
+      setStunValue('#manual-stun-path', 'STUN disabled', 'neutral')
+      return
+    }
+
+    if (session.localCandidates.srflx > 0) {
+      const count = session.localCandidates.srflx
+      setStunValue('#manual-stun-result', `Successful — ${count} server-reflexive candidate${count === 1 ? '' : 's'}`, 'success')
+      setStunValue(
+        '#manual-stun-server',
+        session.stunUrls.join(', ') || 'Successful — responder not reported by browser',
+        session.stunUrls.length ? 'success' : 'neutral',
+      )
+      return
+    }
+
+    if (session.pc.iceGatheringState === 'complete') {
+      setStunValue('#manual-stun-result', 'Unsuccessful — no server-reflexive candidate', 'failure')
+      setStunValue('#manual-stun-server', 'No STUN response observed', 'failure')
+      return
+    }
+
+    const configured = configuredStunUrls()
+    setStunValue('#manual-stun-result', 'Checking…', 'pending')
+    setStunValue('#manual-stun-server', configured.length ? `Trying ${configured.join(', ')}` : 'No server configured', configured.length ? 'pending' : 'failure')
+  }
+
+  function renderSelectedStunPath(pair: CandidatePair | undefined, connectionState: RTCPeerConnectionState) {
+    if (probe?.strategy.id === 'lan') return
+    if (!pair?.local && !pair?.remote) {
+      const finished = connectionState === 'failed' || connectionState === 'closed'
+      setStunValue('#manual-stun-path', finished ? 'No successful candidate pair' : 'Waiting for selected pair', finished ? 'failure' : 'pending')
+      return
+    }
+    const usedStunCandidate = pair.local?.type === 'srflx' || pair.remote?.type === 'srflx'
+    setStunValue(
+      '#manual-stun-path',
+      usedStunCandidate ? 'Yes — selected pair uses a STUN-derived candidate' : 'No — selected pair is direct host/peer-reflexive',
+      usedStunCandidate ? 'success' : 'neutral',
+    )
+  }
+
+  function summarizeStun(session: Probe, pair: CandidatePair | undefined) {
+    const requested = session.strategy.id === 'stun'
+    const successful = requested && session.localCandidates.srflx > 0
+    const hasSelectedPair = Boolean(pair?.local || pair?.remote)
+    return {
+      requested,
+      configuredServers: requested ? configuredStunUrls() : [],
+      respondingServers: session.stunUrls,
+      responderReportingSupported: session.stunUrls.length > 0,
+      discoverySuccessful: successful,
+      selectedPathUsesStunCandidate: hasSelectedPair
+        ? Boolean(pair?.local?.type === 'srflx' || pair?.remote?.type === 'srflx')
+        : null,
+    }
+  }
+
+  function recordReportedStunUrls(session: Probe, pair: CandidatePair | undefined) {
+    for (const url of [pair?.local?.url, pair?.remote?.url]) {
+      if (url && /^stuns?:/iu.test(url) && !session.stunUrls.includes(url)) session.stunUrls.push(url)
+    }
+  }
+
+  function configuredStunUrls() {
+    return configuration.stunServers.flatMap(({ urls }) => Array.isArray(urls) ? urls : [urls])
+  }
+
+  function setStunValue(selector: string, text: string, tone: 'success' | 'failure' | 'pending' | 'neutral' = 'neutral') {
+    const element = $<HTMLElement>(selector)
+    element.textContent = text
+    element.dataset.tone = tone
   }
 }
 

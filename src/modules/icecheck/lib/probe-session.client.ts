@@ -32,6 +32,7 @@ export function createProbeSession(options: CreateProbeSessionOptions): ProbeSes
     mediaSupported: false,
     localCandidates: emptyCandidateCounts(),
     remoteCandidates: emptyCandidateCounts(),
+    stunUrls: [],
     stateHistory: [],
     errors: [],
     pingRtts: [],
@@ -62,7 +63,11 @@ export function createProbeSession(options: CreateProbeSessionOptions): ProbeSes
 
   pc.onicecandidate = ({ candidate }) => {
     if (destroyed) return
-    if (candidate) countCandidate(probe.localCandidates, candidate)
+    if (candidate) {
+      countCandidate(probe.localCandidates, candidate)
+      const url = 'url' in candidate && typeof candidate.url === 'string' ? candidate.url : ''
+      if (candidate.type === 'srflx' && url && !probe.stunUrls.includes(url)) probe.stunUrls.push(url)
+    }
     else probe.gatheringResolve(true)
     options.onUpdate(probe)
   }

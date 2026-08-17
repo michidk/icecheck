@@ -19,6 +19,7 @@ export interface CandidateSummary {
   protocol?: string
   address?: string
   port?: number
+  url?: string
   networkType?: string
   relayProtocol?: string
 }
@@ -39,6 +40,7 @@ export interface CandidateStats extends RTCStats {
   port?: number
   protocol?: string
   relayProtocol?: string
+  url?: string
 }
 
 export interface MediaStats {
@@ -89,6 +91,7 @@ export interface Probe {
   mediaSupported: boolean
   localCandidates: CandidateCounts
   remoteCandidates: CandidateCounts
+  stunUrls: string[]
   stateHistory: ProbeState[]
   errors: string[]
   pingRtts: number[]

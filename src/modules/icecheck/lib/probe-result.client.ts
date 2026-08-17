@@ -87,6 +87,7 @@ function summarizeCandidate(candidate: CandidateStats | undefined): CandidateSum
     protocol: candidate.protocol,
     address: candidate.address || candidate.ip,
     port: candidate.port,
+    url: candidate.url,
     networkType: candidate.networkType,
     relayProtocol: candidate.relayProtocol,
   }

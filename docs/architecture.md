@@ -77,6 +77,7 @@ Each browser records:
 
 - connection, ICE, gathering, and SDP signaling states
 - local and remote candidate counts by type
+- STUN discovery success, configured and browser-reported responding servers, and whether the selected path uses a server-reflexive candidate
 - selected local and remote candidate details
 - current candidate-pair round-trip time when available
 - data-channel state and ping round-trip samples

@@ -72,6 +72,8 @@ test('serves the single-page diagnostic UI and ICE configuration', async () => {
   assert.match(home, /Your connection data stays with you/);
   assert.match(home, /View on GitHub/);
   assert.match(home, /Start or answer a connection/);
+  assert.match(home, /STUN discovery/);
+  assert.match(home, /STUN server/);
   assert.doesNotMatch(home, /signaling_websocket/);
 });
 
