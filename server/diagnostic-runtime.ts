@@ -2,23 +2,24 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 type RuntimeEnvironment = Record<string, string | undefined>
 
-export function createDiagnosticRuntime(environment: RuntimeEnvironment = process.env) {
-  const basePath = normalizeBasePath(environment.BASE_PATH)
-  const runtimePath = (pathname: string) => `${basePath}${pathname}`
+export const SECURITY_HEADERS = {
+  'Referrer-Policy': 'no-referrer',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Permissions-Policy': 'camera=(), microphone=(), display-capture=()',
+} as const
 
+export function createDiagnosticRuntime(environment: RuntimeEnvironment = process.env) {
   function middleware(request: IncomingMessage, response: ServerResponse, next: () => void) {
     response.setHeader('Cache-Control', 'no-store')
-    response.setHeader('Referrer-Policy', 'no-referrer')
-    response.setHeader('X-Content-Type-Options', 'nosniff')
-    response.setHeader('X-Frame-Options', 'DENY')
-    response.setHeader('Permissions-Policy', 'camera=(), microphone=(), display-capture=()')
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.setHeader(name, value)
 
     const pathname = new URL(request.url || '/', 'http://localhost').pathname
-    if (request.method === 'GET' && pathname === runtimePath('/health')) {
+    if (request.method === 'GET' && pathname === '/health') {
       sendJson(response, { ok: true })
       return
     }
-    if (request.method === 'GET' && pathname === runtimePath('/config')) {
+    if (request.method === 'GET' && pathname === '/config') {
       sendJson(response, buildIceConfiguration(environment))
       return
     }
@@ -37,11 +38,6 @@ export function buildIceConfiguration(environment: RuntimeEnvironment = process.
 
 function splitList(value: string): string[] {
   return value.split(',').map((item) => item.trim()).filter(Boolean)
-}
-
-function normalizeBasePath(value = ''): string {
-  const normalized = String(value).trim().replace(/^\/*|\/*$/g, '')
-  return normalized ? `/${normalized}` : ''
 }
 
 function sendJson(response: ServerResponse, value: unknown) {

@@ -3,9 +3,8 @@ import { nitro } from 'nitro/vite'
 import viteReact from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
-import { createDiagnosticRuntime } from './server/diagnostic-runtime.ts'
+import { createDiagnosticRuntime, SECURITY_HEADERS } from './server/diagnostic-runtime.ts'
 
-const basePath = normalizeBasePath(process.env.BASE_PATH)
 const allowedHosts = splitList(process.env.ALLOWED_HOSTS)
 
 function diagnosticRuntimePlugin(): Plugin {
@@ -19,7 +18,6 @@ function diagnosticRuntimePlugin(): Plugin {
 }
 
 export default defineConfig({
-  base: basePath ? `${basePath}/` : '/',
   server: {
     host: process.env.HOST || '0.0.0.0',
     port: Number(process.env.PORT || 4173),
@@ -38,15 +36,13 @@ export default defineConfig({
     }),
     nitro({
       serverDir: 'server',
+      routeRules: {
+        '/**': { headers: SECURITY_HEADERS },
+      },
     }),
     viteReact(),
   ],
 })
-
-function normalizeBasePath(value = '') {
-  const normalized = value.trim().replace(/^\/*|\/*$/g, '')
-  return normalized ? `/${normalized}` : ''
-}
 
 function splitList(value = '') {
   return value.split(',').map((item) => item.trim()).filter(Boolean)

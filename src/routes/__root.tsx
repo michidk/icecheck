@@ -14,7 +14,7 @@ export const Route = createRootRoute({
       { title: 'icecheck' },
     ],
     links: [
-      { rel: 'icon', href: `${import.meta.env.BASE_URL}favicon.svg`, type: 'image/svg+xml' },
+      { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
       { rel: 'stylesheet', href: appCss },
     ],
   }),

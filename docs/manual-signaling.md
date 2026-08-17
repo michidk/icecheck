@@ -38,7 +38,7 @@ await pc.setLocalDescription(await pc.createAnswer())
 
 WebRTC applications commonly send the initial SDP immediately and then send each ICE candidate as it is discovered. This is called trickle ICE.
 
-Clipboard signaling has no persistent channel for later candidates. icecheck therefore waits until ICE gathering completes before copying `pc.localDescription`. At that point, the browser has inserted gathered candidates into the SDP.
+Clipboard and native-share signaling have no persistent channel for later candidates. icecheck therefore waits until ICE gathering completes before transferring `pc.localDescription`. At that point, the browser has inserted gathered candidates into the SDP.
 
 The tool waits up to 15 seconds. If gathering times out, it still creates a payload with the candidates gathered so far and marks `iceComplete` as `false`.
 

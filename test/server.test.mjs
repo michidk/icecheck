@@ -59,6 +59,12 @@ test('serves the single-page diagnostic UI and ICE configuration', async () => {
     urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'],
   }] });
   assert.equal(configResponse.headers.get('cache-control'), 'no-store');
+  for (const response of [healthResponse, configResponse, faviconResponse, homeResponse]) {
+    assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(response.headers.get('x-frame-options'), 'DENY');
+    assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), display-capture=()');
+  }
   assert.equal(faviconResponse.status, 200);
   assert.match(faviconResponse.headers.get('content-type'), /image\/svg\+xml/);
   assert.deepEqual(
@@ -72,6 +78,7 @@ test('serves the single-page diagnostic UI and ICE configuration', async () => {
   assert.match(home, /Your connection data stays with you/);
   assert.match(home, /View on GitHub/);
   assert.match(home, /Start or answer a connection/);
+  assert.match(home, /No connection tested yet/);
   assert.match(home, /STUN discovery/);
   assert.match(home, /STUN server/);
   assert.doesNotMatch(home, /signaling_websocket/);

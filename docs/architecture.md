@@ -58,7 +58,7 @@ apply complete answer <----------------------- copy complete answer
               data channel and video flow peer-to-peer
 ```
 
-Gathering waits for `iceGatheringState === "complete"` with a 15-second limit. A timed-out payload includes candidates gathered so far and records `iceComplete: false`.
+Gathering waits for `iceGatheringState === "complete"` with a 15-second limit. A timed-out payload includes candidates gathered so far and records `iceComplete: false`. The UI presents the next role-specific handoff action and derives a verdict from the connection, data-channel, and media results.
 
 The answer is accepted only when its session identifier and ICE strategy match the current offer. Resetting or leaving the route closes the peer connection, data channel, generated media tracks, polling interval, event handlers, and pending work.
 
@@ -88,7 +88,7 @@ Reports stay in the browser. The only application-server request made by the dia
 
 ## Deployment properties
 
-The Nitro production output and Vite development adapter share the same HTTP middleware for `/config` and `/health`. Vercel can create, stop, or route requests among function instances without invalidating a diagnostic because all peer state lives in the two browser tabs.
+The Nitro production output and Vite development adapter expose the same `/config` and `/health` contracts. Nitro middleware and the development adapter apply the same security headers; Vercel repeats those headers at the deployment edge. Vercel can create, stop, or route requests among function instances without invalidating a diagnostic because all peer state lives in the two browser tabs.
 
 Production should provide HTTPS and allow outbound access to the configured STUN endpoints. Both devices must be able to reach the deployed page, but they do not need to reach the same application instance.
 
@@ -97,6 +97,6 @@ Production should provide HTTPS and allow outbound access to the configured STUN
 - Contract tests cover candidate classification.
 - Codec tests cover round-trip encoding, version checks, correlation fields, and defensive limits.
 - Built-server tests verify the diagnostic page and stateless HTTP endpoints.
-- Browser tests verify diagnostic readiness and clean initialization after a reload.
+- Browser tests verify readiness, configuration and payload failures, a complete two-page WebRTC exchange, and peer cleanup after reset.
 
 See [Manual signaling protocol](manual-signaling.md) for the exact envelope schema and operator state machine.

@@ -43,15 +43,23 @@ export function ManualDiagnostic() {
             <label htmlFor="manual-strategy">Connection strategy</label>
             <select id="manual-strategy" defaultValue="stun">
               <option value="lan">LAN only — no STUN</option>
-              <option value="stun">STUN-assisted — direct candidates</option>
+              <option id="manual-stun-option" value="stun">STUN-assisted — direct candidates</option>
             </select>
             <button id="manual-create-offer" className="button primary" type="button" disabled>Create an offer <span aria-hidden="true">→</span></button>
             <button id="manual-reset" className="button quiet" type="button">Start over</button>
           </div>
 
-          <div className="role-guidance">
-            <p><strong>Starting here?</strong> Select a path and create an offer.</p>
-            <p><strong>Answering?</strong> Paste the other browser&apos;s offer; its path is selected automatically.</p>
+          <div className="workflow-guidance" role="status" aria-live="polite" aria-atomic="true">
+            <span id="manual-workflow-label">Ready</span>
+            <div>
+              <strong id="manual-workflow-title">Choose how this browser starts</strong>
+              <p id="manual-workflow-detail">Create an offer here, or paste an offer from the other browser below.</p>
+            </div>
+          </div>
+
+          <div id="manual-error" className="manual-error" role="alert" hidden>
+            <strong>Couldn&apos;t continue</strong>
+            <p id="manual-error-message" />
           </div>
 
           <div className="exchange-heading">
@@ -69,7 +77,10 @@ export function ManualDiagnostic() {
                 <span id="manual-local-meta">Nothing generated yet</span>
               </div>
               <textarea id="manual-local-payload" aria-describedby="manual-local-meta" readOnly spellCheck={false} placeholder="Your generated payload will appear here." />
-              <button id="manual-copy-payload" className="button payload-action" type="button" disabled>Copy outbound payload</button>
+              <div className="payload-actions">
+                <button id="manual-copy-payload" className="button payload-action" type="button" disabled>Copy outbound payload</button>
+                <button id="manual-share-payload" className="button quiet payload-action" type="button" disabled hidden>Share payload</button>
+              </div>
             </section>
 
             <div className="exchange-divider" aria-hidden="true"><span>⇄</span></div>
@@ -98,6 +109,15 @@ export function ManualDiagnostic() {
               </div>
             </div>
           </header>
+
+          <div id="manual-verdict" className="diagnostic-verdict" data-tone="idle" role="status" aria-live="polite" aria-atomic="true">
+            <span id="manual-verdict-label">Not started</span>
+            <div>
+              <h3 id="manual-verdict-title">No connection tested yet</h3>
+              <p id="manual-verdict-detail">Complete the clipboard exchange to test a direct path.</p>
+              <small>No TURN server is configured, so failure does not prove WebRTC is unavailable.</small>
+            </div>
+          </div>
 
           <dl className="manual-status">
             <div><dt>Role</dt><dd id="manual-role">idle</dd></div>
