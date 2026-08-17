@@ -6,8 +6,7 @@ export function SiteHeader() {
         <span>icecheck</span>
       </a>
       <div className="header-status" aria-label="Application properties">
-        <span><i /> No signaling server</span>
-        <span>Open source</span>
+        <span><i /> Clipboard signaling</span>
       </div>
       <div className="site-header-actions">
         <a className="github-link" href="https://github.com/michidk/icecheck" target="_blank" rel="noreferrer">
