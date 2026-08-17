@@ -13,14 +13,8 @@ export function ManualDiagnostic() {
       <main className="diagnostic-page" data-icecheck-mode="manual">
         <section className="diagnostic-hero">
           <div className="hero-copy">
-            <span className="eyebrow"><i /> WebRTC path diagnostic</span>
-            <h1>See if two browsers can <em>really</em> connect.</h1>
-            <p>Inspect ICE candidates, the selected network path, data-channel latency, and video transport — without handing your SDP to a signaling service.</p>
-            <div className="hero-notes">
-              <span>Two browsers</span>
-              <span>Copy + paste</span>
-              <span>No account</span>
-            </div>
+            <h1>Test the real WebRTC path between two browsers.</h1>
+            <p>icecheck establishes a direct browser-to-browser connection, then shows the ICE candidates, selected network path, data-channel latency, and video transport that actually work.</p>
           </div>
           <ol className="quick-guide" aria-label="How the diagnostic works">
             <li><span>01</span><div><strong>Open twice</strong><small>Load this page in both browsers.</small></div></li>
@@ -40,11 +34,9 @@ export function ManualDiagnostic() {
             <div className="title-with-step">
               <span className="step-number">01</span>
               <div>
-                <span className="section-kicker">Configure &amp; exchange</span>
                 <h2>Start or answer a connection</h2>
               </div>
             </div>
-            <span className="protocol-badge"><i /> Complete ICE payloads only</span>
           </header>
 
           <div className="manual-toolbar">
@@ -63,8 +55,7 @@ export function ManualDiagnostic() {
           </div>
 
           <div className="exchange-heading">
-              <span className="section-kicker">Clipboard handoff</span>
-              <p>Send the outbound payload privately, then paste the response you receive.</p>
+              <p><strong>Clipboard handoff.</strong> Send the outbound payload privately, then paste the response you receive.</p>
           </div>
 
           <div className="manual-exchange">
@@ -103,11 +94,9 @@ export function ManualDiagnostic() {
             <div className="title-with-step">
               <span className="step-number">02</span>
               <div>
-                <span className="section-kicker">Inspect the negotiated path</span>
                 <h2>Connection snapshot</h2>
               </div>
             </div>
-            <span className="live-indicator"><i /> Browser reported</span>
           </header>
 
           <dl className="manual-status">
@@ -132,14 +121,7 @@ export function ManualDiagnostic() {
           </div>
         </section>
 
-        <div className="diagnostic-footer-grid">
-          <RuntimePanel />
-          <aside className="security-panel">
-            <span className="section-kicker">Payload safety</span>
-            <h2>Keep connection data private</h2>
-            <p>Base64url is encoding, not encryption. SDP can expose IP addresses, temporary ICE credentials, codecs, and browser or network metadata.</p>
-          </aside>
-        </div>
+        <RuntimePanel />
       </main>
 
       <ClientElements />

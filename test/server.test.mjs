@@ -68,10 +68,9 @@ test('serves the single-page diagnostic UI and ICE configuration', async () => {
     { stunServers: [{ urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }] },
   );
   assert.equal(homeResponse.status, 200);
-  assert.match(home, /See if two browsers can/);
+  assert.match(home, /Test the real WebRTC path between two browsers/);
   assert.match(home, /Your connection data stays with you/);
   assert.match(home, /View on GitHub/);
-  assert.match(home, /Base64url is encoding, not encryption/);
   assert.match(home, /Start or answer a connection/);
   assert.doesNotMatch(home, /signaling_websocket/);
 });

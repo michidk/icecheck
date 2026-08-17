@@ -2,7 +2,6 @@ export function RuntimePanel() {
   return (
     <section className="runtime-panel">
       <header>
-        <span className="section-kicker">Environment</span>
         <h2>Browser readiness</h2>
       </header>
       <dl className="runtime-table">
