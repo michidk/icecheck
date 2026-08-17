@@ -10,7 +10,7 @@ The copy/paste workflow lets developers answer this question:
 
 > Can these two browsers establish the selected WebRTC path when the SDP is exchanged correctly by hand?
 
-Open `/manual` on both browsers, or use **Open diagnostic** from the overview page.
+Open the icecheck root page on both browsers.
 
 ## Browser APIs used
 

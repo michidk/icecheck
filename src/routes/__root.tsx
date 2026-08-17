@@ -10,7 +10,7 @@ export const Route = createRootRoute({
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { name: 'color-scheme', content: 'light' },
-      { name: 'theme-color', content: '#f6f6f6' },
+      { name: 'theme-color', content: '#15221e' },
       { title: 'icecheck' },
     ],
     links: [

@@ -32,7 +32,7 @@ npm run build
 npm start
 ```
 
-The development server defaults to `http://localhost:4173`. Open `/manual` in two browsers or select **Open diagnostic** on the overview page.
+The development server defaults to `http://localhost:4173`. Open the root page in two browsers to begin the diagnostic.
 
 ## Diagnostic workflow
 
@@ -60,7 +60,7 @@ Only `stun:` and `stuns:` entries are accepted. TURN credentials are intentional
 
 The generated Nitro server exposes only stateless HTTP behavior:
 
-- the SPA routes `/` and `/manual`
+- the single-page diagnostic route `/`
 - `GET /config` for public ICE configuration
 - `GET /health` for readiness
 - static assets

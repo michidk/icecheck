@@ -43,17 +43,16 @@ before(async () => {
 
 after(() => app?.kill('SIGTERM'));
 
-test('serves the manual diagnostic UI and ICE configuration', async () => {
-  const [healthResponse, configResponse, faviconResponse, homeResponse, manualResponse] = await Promise.all([
+test('serves the single-page diagnostic UI and ICE configuration', async () => {
+  const [healthResponse, configResponse, faviconResponse, homeResponse] = await Promise.all([
     fetch(`${baseUrl}/health`),
     fetch(`${baseUrl}/config`),
     fetch(`${baseUrl}/favicon.svg`),
     fetch(`${baseUrl}/`),
-    fetch(`${baseUrl}/manual`),
   ]);
   const health = await healthResponse.json();
   const config = await configResponse.json();
-  const [home, manual] = await Promise.all([homeResponse.text(), manualResponse.text()]);
+  const home = await homeResponse.text();
 
   assert.deepEqual(health, { ok: true });
   assert.deepEqual(config, { stunServers: [{
@@ -68,14 +67,13 @@ test('serves the manual diagnostic UI and ICE configuration', async () => {
     }),
     { stunServers: [{ urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }] },
   );
-  assert.deepEqual([homeResponse.status, manualResponse.status], [200, 200]);
-  assert.match(home, /Debug ICE, STUN &amp; WebRTC/);
-  assert.match(home, /The offer and answer move through your clipboard/);
-  assert.match(home, /Open diagnostic/);
-  assert.match(manual, /Debug a WebRTC connection/);
-  assert.match(manual, /Base64url is encoding, not encryption/);
-  assert.match(manual, /Start or answer a connection/);
-  assert.doesNotMatch(manual, /signaling_websocket/);
+  assert.equal(homeResponse.status, 200);
+  assert.match(home, /See if two browsers can/);
+  assert.match(home, /Your connection data stays with you/);
+  assert.match(home, /View on GitHub/);
+  assert.match(home, /Base64url is encoding, not encryption/);
+  assert.match(home, /Start or answer a connection/);
+  assert.doesNotMatch(home, /signaling_websocket/);
 });
 
 test('round-trips and validates base64url signaling envelopes', () => {

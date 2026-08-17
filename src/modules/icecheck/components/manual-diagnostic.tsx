@@ -8,36 +8,52 @@ export function ManualDiagnostic() {
 
   return (
     <>
-      <SiteHeader label="ICE / STUN / WebRTC debugger" />
+      <SiteHeader />
 
       <main className="diagnostic-page" data-icecheck-mode="manual">
         <section className="diagnostic-hero">
-          <div>
-            <span className="eyebrow">Direct browser-to-browser test</span>
-            <h1>Debug a WebRTC connection</h1>
-            <p>Open this page in both browsers. One creates an offer; the other returns an answer. The connection itself stays peer to peer.</p>
+          <div className="hero-copy">
+            <span className="eyebrow"><i /> WebRTC path diagnostic</span>
+            <h1>See if two browsers can <em>really</em> connect.</h1>
+            <p>Inspect ICE candidates, the selected network path, data-channel latency, and video transport — without handing your SDP to a signaling service.</p>
+            <div className="hero-notes">
+              <span>Two browsers</span>
+              <span>Copy + paste</span>
+              <span>No account</span>
+            </div>
           </div>
-          <div className="exchange-overview" aria-label="Offer and answer flow">
-            <span>Browser A</span><i>offer →</i><span>Browser B</span><i>← answer</i><span>Browser A</span>
-          </div>
+          <ol className="quick-guide" aria-label="How the diagnostic works">
+            <li><span>01</span><div><strong>Open twice</strong><small>Load this page in both browsers.</small></div></li>
+            <li><span>02</span><div><strong>Exchange payloads</strong><small>Send the offer over, then the answer back.</small></div></li>
+            <li><span>03</span><div><strong>Read the path</strong><small>Compare live results on both sides.</small></div></li>
+          </ol>
         </section>
+
+        <aside className="privacy-banner">
+          <span className="privacy-icon" aria-hidden="true">⌁</span>
+          <p><strong>Your connection data stays with you.</strong> Payloads travel only through your clipboard and the private channel you choose.</p>
+          <span>Base64url ≠ encryption</span>
+        </aside>
 
         <section id="manual-panel" className="panel exchange-workspace">
           <header className="workspace-header">
-            <div>
-              <span className="section-kicker">Configure</span>
-              <h2>Start or answer a connection</h2>
+            <div className="title-with-step">
+              <span className="step-number">01</span>
+              <div>
+                <span className="section-kicker">Configure &amp; exchange</span>
+                <h2>Start or answer a connection</h2>
+              </div>
             </div>
-            <span className="protocol-badge"><i /> Complete ICE payloads</span>
+            <span className="protocol-badge"><i /> Complete ICE payloads only</span>
           </header>
 
           <div className="manual-toolbar">
-            <label htmlFor="manual-strategy">ICE path</label>
+            <label htmlFor="manual-strategy">Connection strategy</label>
             <select id="manual-strategy" defaultValue="stun">
               <option value="lan">LAN only — no STUN</option>
               <option value="stun">STUN-assisted — direct candidates</option>
             </select>
-            <button id="manual-create-offer" className="button primary" type="button" disabled>Create offer</button>
+            <button id="manual-create-offer" className="button primary" type="button" disabled>Create an offer <span aria-hidden="true">→</span></button>
             <button id="manual-reset" className="button quiet" type="button">Start over</button>
           </div>
 
@@ -47,15 +63,15 @@ export function ManualDiagnostic() {
           </div>
 
           <div className="exchange-heading">
-            <span className="section-kicker">Exchange</span>
-            <p>Move the outbound payload to the other browser, then bring its response back.</p>
+              <span className="section-kicker">Clipboard handoff</span>
+              <p>Send the outbound payload privately, then paste the response you receive.</p>
           </div>
 
           <div className="manual-exchange">
             <section className="payload-panel outbound">
               <div className="payload-title">
-                <span className="payload-direction">From this browser</span>
-                <strong>Outbound payload</strong>
+                <span className="payload-direction"><i /> From this browser</span>
+                <strong>Send</strong>
               </div>
               <div className="field-heading">
                 <label htmlFor="manual-local-payload">Offer or answer to send</label>
@@ -69,8 +85,8 @@ export function ManualDiagnostic() {
 
             <section className="payload-panel inbound">
               <div className="payload-title">
-                <span className="payload-direction">From the other browser</span>
-                <strong>Inbound payload</strong>
+                <span className="payload-direction"><i /> From the other browser</span>
+                <strong>Receive</strong>
               </div>
               <div className="field-heading">
                 <label htmlFor="manual-remote-payload">Offer or answer to apply</label>
@@ -84,9 +100,12 @@ export function ManualDiagnostic() {
 
         <section className="panel results-panel">
           <header className="workspace-header results-header">
-            <div>
-              <span className="section-kicker">Inspect</span>
-              <h2>Connection snapshot</h2>
+            <div className="title-with-step">
+              <span className="step-number">02</span>
+              <div>
+                <span className="section-kicker">Inspect the negotiated path</span>
+                <h2>Connection snapshot</h2>
+              </div>
             </div>
             <span className="live-indicator"><i /> Browser reported</span>
           </header>

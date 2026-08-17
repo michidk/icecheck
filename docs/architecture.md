@@ -7,8 +7,7 @@ icecheck is a stateless TanStack Start SPA with a browser-only WebRTC diagnostic
 ```text
 routes                    icecheck feature                  platform adapters
 ------                    ----------------                  -----------------
-/ overview                route-owned overview UI
-/manual     ----------->  public diagnostic component
+/            -----------> public diagnostic component
                            lifecycle hook
                            manual controller  ----------->  native browser WebRTC
                            codec + reports
@@ -18,7 +17,6 @@ browser GET /health  ------------------------------------>  Nitro or Vite HTTP a
 ```
 
 - Route files own URLs, metadata, and page composition.
-- The overview UI is route-owned under `src/routes/(home)/-components`.
 - `src/modules/icecheck/components` is the reusable diagnostic feature's public UI boundary.
 - `hooks/use-manual-diagnostic.ts` loads browser code only after hydration and disposes it on route unmount.
 - `lib/manual-client.client.ts` coordinates the UI state machine.
@@ -31,10 +29,7 @@ The architecture checker enforces the route-to-feature and server-to-client impo
 
 ## Routes and server surface
 
-The application exposes two pages:
-
-- `/` explains the workflow and links to the diagnostic.
-- `/manual` owns the interactive two-browser exchange.
+The application exposes one page: `/` introduces and runs the interactive two-browser exchange.
 
 The server exposes two JSON endpoints:
 
@@ -100,7 +95,7 @@ Production should provide HTTPS and allow outbound access to the configured STUN
 
 - Contract tests cover candidate classification.
 - Codec tests cover round-trip encoding, version checks, correlation fields, and defensive limits.
-- Built-server tests verify the two pages and stateless HTTP endpoints.
-- Browser tests verify the overview-to-diagnostic journey and cleanup across client-side navigation.
+- Built-server tests verify the diagnostic page and stateless HTTP endpoints.
+- Browser tests verify diagnostic readiness and clean initialization after a reload.
 
 See [Manual signaling protocol](manual-signaling.md) for the exact envelope schema and operator state machine.
