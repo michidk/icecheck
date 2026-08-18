@@ -64,6 +64,8 @@ Only `stun:` and `stuns:` entries are accepted. TURN credentials are intentional
 
 ## Deployment
 
+Vercel is linked to the GitHub repository. Every push to `main` creates a production deployment and updates [icecheck.vercel.app](https://icecheck.vercel.app); other branches receive preview deployments.
+
 The generated Nitro server exposes only stateless HTTP behavior:
 
 - the single-page diagnostic route `/`
