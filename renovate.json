@@ -14,6 +14,12 @@
         "npm"
       ],
       "groupName": "All npm Dependencies"
+    },
+    {
+      "description": "Keep the ESLint compiler API on TypeScript 6 until typescript-eslint supports 7; typescript-compiler updates independently.",
+      "matchManagers": ["npm"],
+      "matchDepNames": ["typescript"],
+      "allowedVersions": "<6.1.0"
     }
   ]
 }
