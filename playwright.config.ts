@@ -7,6 +7,10 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL: externalBaseUrl || 'http://127.0.0.1:4173',
+    launchOptions: {
+      // The two test peers share a host; do not depend on CI multicast DNS.
+      args: ['--disable-features=WebRtcHideLocalIpsWithMdns'],
+    },
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
