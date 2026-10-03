@@ -121,6 +121,8 @@ npm run test:e2e
 
 `verify` runs ESLint, architecture checks, TypeScript, the production build, and Node integration tests.
 
+Builds and `npm run typecheck` use TypeScript 7 through the `typescript-compiler` npm alias. The separate TypeScript 6 dependency supplies the compiler API required by `typescript-eslint`, which does not yet support TypeScript 7. The scripts select the compiler explicitly because both packages provide a `tsc` executable.
+
 The browser suite starts the development server automatically and expects Chromium plus its system dependencies to be installed (`npx playwright install --with-deps chromium`). It performs a complete two-page offer/answer exchange in addition to lifecycle and failure-state checks. Set `E2E_BASE_URL` to run it against an existing deployment. Playwright output is kept under `.playwright/`.
 
 ## Security
