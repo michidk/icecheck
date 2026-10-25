@@ -5,7 +5,7 @@
 #   formatter: biome
 #   formatter_flags: .
 #   lint_command: bun run lint
-#   test_command: bun test
+#   test_command: bun run test
 #   typecheck_command: bun run typecheck
 #   build_command: bun run build
 # @end-orcastrate

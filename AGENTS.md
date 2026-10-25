@@ -4,10 +4,10 @@ icecheck is a stateless TanStack Start SPA for manual, two-browser WebRTC diagno
 
 ## Working locally
 
-- Use Node.js 24 and npm.
-- Run `npm run dev` for the development server (port 4173 by default).
-- Run `npm run verify` before handing off code changes.
-- Run `npm run test:e2e` for user-flow or browser-lifecycle changes. It starts the development server unless `E2E_BASE_URL` is set. Install Chromium with `npx playwright install chromium` if needed.
+- Use Bun 1.4.3.
+- Run `bun run dev` for the development server (port 4173 by default).
+- Run `bun run verify` before handing off code changes.
+- Run `bun run test:e2e` for user-flow or browser-lifecycle changes. It starts the development server unless `E2E_BASE_URL` is set. Install Chromium with `bunx playwright install chromium` if needed.
 - Keep all Playwright output in `.playwright/`.
 - Use Conventional Commits and commit directly to `main` unless the task says otherwise.
 
@@ -34,8 +34,8 @@ The architecture, workflow, and payload behavior are summarized in `README.md`.
 
 ## Tests and generated output
 
-- `npm run lint` runs ESLint plus import-boundary checks.
-- `npm test` builds the production app before running server and codec tests.
-- `npm run verify:full` includes the Playwright suite.
+- `bun run lint` runs ESLint plus import-boundary checks.
+- `bun run test` builds the production app before running server and codec tests.
+- `bun run verify:full` includes the Playwright suite.
 - Update user-facing assertions when intentionally changing copy; do not weaken them to make unintended changes pass.
 - Never commit `.output`, `.vite`, `.tanstack`, or transient Playwright artifacts.
