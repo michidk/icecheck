@@ -1,3 +1,11 @@
+# @orcastrate
+# template: node/ci
+# params:
+#   package_manager: npm
+#   node_version: 24
+#   test_command: npm test
+# @end-orcastrate
+
 name: CI
 
 on:
