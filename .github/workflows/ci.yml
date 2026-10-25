@@ -2,10 +2,29 @@
 # template: node/ci
 # params:
 #   bun_version: "1.4.3"
-#   formatter: biome
-#   formatter_flags: .
 #   lint_command: bun run lint
 #   test_command: bun run test
 #   typecheck_command: bun run typecheck
 #   build_command: bun run build
 # @end-orcastrate
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+      - run: bun install --frozen-lockfile
+      - run: bun run verify
