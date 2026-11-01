@@ -39,7 +39,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Format and lint with Biome
-        uses: mongolyy/reviewdog-action-biome@c49bee54c1f87e4be32446ae3deca3a186b88a3a # v2.11.2
+        uses: mongolyy/reviewdog-action-biome@6a70a14e22af921018dcf7c9f3f669cbdc83ca0c # v2.11.3
         with:
           reporter: github-check
           fail_on_error: true
