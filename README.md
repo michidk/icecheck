@@ -2,9 +2,13 @@
 
 `icecheck` is a developer tool for testing whether two browsers can establish a direct WebRTC connection. It gathers ICE candidates, opens a data channel, sends synthetic video, and exposes the selected candidate pair and connection statistics.
 
+<p align="center"><a href="https://icecheck.vercel.app">Open icecheck</a> · <a href="#diagnostic-workflow">Run a diagnostic</a> · <a href="#interpretation">Interpret results</a></p>
+
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a></p>
+
 <picture>
   <source media="(max-width: 640px)" srcset=".github/screenshots/icecheck-mobile.png">
-  <img alt="icecheck manual WebRTC diagnostic" src=".github/screenshots/icecheck-desktop.png">
+  <img alt="icecheck manual WebRTC diagnostic" src=".github/screenshots/icecheck-desktop.png" width="800">
 </picture>
 
 The offer and answer are exchanged by copy and paste or the browser's native share sheet. There are no rooms, WebSockets, or process-local connection registries, so the application is compatible with stateless deployments such as Vercel Functions.
@@ -21,24 +25,6 @@ The offer and answer are exchanged by copy and paste or the browser's native sha
 
 No TURN server is configured, so icecheck does not test relayed connectivity or bandwidth.
 
-## Run locally
-
-Requirements: Node.js 24 and npm.
-
-```bash
-npm install
-npm run dev
-```
-
-For a production build:
-
-```bash
-npm run build
-npm start
-```
-
-The development server defaults to `http://localhost:4173`. Open the root page in two browsers to begin the diagnostic.
-
 ## Diagnostic workflow
 
 1. On browser A, select an ICE strategy and choose **Create offer**.
@@ -50,6 +36,24 @@ The development server defaults to `http://localhost:4173`. Open the root page i
 Each base64url payload contains a complete session description. icecheck waits for non-trickle ICE gathering before encoding it, so no persistent signaling channel is needed. Payloads are versioned JSON envelopes containing the role, ICE strategy, SDP type, and SDP body; malformed, mismatched, oversized, and replayed payloads are rejected.
 
 The negotiation sequence is deliberately small: the offerer creates a complete offer, the answerer validates and applies it before creating a complete answer, and the offerer validates and applies that answer. A reset or unmount closes peer connections, tracks, channels, timers, listeners, and pending work before another exchange begins.
+
+## Run locally
+
+Requirements: Bun 1.4.3 for package management and Node.js 24 for the existing build and server scripts.
+
+```bash
+bun install
+bun run dev
+```
+
+For a production build:
+
+```bash
+bun run build
+bun run start
+```
+
+The development server defaults to `http://localhost:4173`. Open the root page in two browsers to begin the diagnostic.
 
 ## Configuration
 
@@ -115,15 +119,15 @@ The root route imports the feature's public React component. Browser-only WebRTC
 ## Verification
 
 ```bash
-npm run verify
-npm run test:e2e
+bun run verify
+bun run test:e2e
 ```
 
 `verify` runs ESLint, architecture checks, TypeScript, the production build, and Node integration tests.
 
-Builds and `npm run typecheck` use TypeScript 7 through the `typescript-compiler` npm alias. The separate TypeScript 6 dependency supplies the compiler API required by `typescript-eslint`, which does not yet support TypeScript 7. The scripts select the compiler explicitly because both packages provide a `tsc` executable.
+Builds and `bun run typecheck` use TypeScript 7 through the `typescript-compiler` npm alias. The separate TypeScript 6 dependency supplies the compiler API required by `typescript-eslint`, which does not yet support TypeScript 7. The scripts select the compiler explicitly because both packages provide a `tsc` executable.
 
-The browser suite starts the development server automatically and expects Chromium plus its system dependencies to be installed (`npx playwright install --with-deps chromium`). It performs a complete two-page offer/answer exchange in addition to lifecycle and failure-state checks. Set `E2E_BASE_URL` to run it against an existing deployment. Playwright output is kept under `.playwright/`.
+The browser suite starts the development server automatically and expects Chromium plus its system dependencies to be installed (`bunx playwright install --with-deps chromium`). It performs a complete two-page offer/answer exchange in addition to lifecycle and failure-state checks. Set `E2E_BASE_URL` to run it against an existing deployment. Playwright output is kept under `.playwright/`.
 
 ## Security
 
