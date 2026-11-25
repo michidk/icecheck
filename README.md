@@ -59,7 +59,7 @@ The development server defaults to `http://localhost:4173`. Open the root page i
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `STUN_URLS` | `stun:main.lohr.dev:3478,stun:stun.l.google.com:19302` | Comma-separated STUN URLs returned by `/config` |
+| `STUN_URLS` | `stun:stun.lohr.dev:3478,stun:stun.l.google.com:19302` | Comma-separated STUN URLs returned by `/config` |
 | `HOST` | `0.0.0.0` | Development-server bind address |
 | `PORT` | runtime-defined | Development or production port |
 | `ALLOWED_HOSTS` | empty | Comma-separated extra Vite development hosts |

@@ -30,7 +30,7 @@ export function createDiagnosticRuntime(environment: RuntimeEnvironment = proces
 }
 
 export function buildIceConfiguration(environment: RuntimeEnvironment = process.env) {
-  const stunUrls = splitList(environment.STUN_URLS || 'stun:main.lohr.dev:3478,stun:stun.l.google.com:19302')
+  const stunUrls = splitList(environment.STUN_URLS || 'stun:stun.lohr.dev:3478,stun:stun.l.google.com:19302')
     .filter((url) => /^stuns?:/i.test(url))
   const stunServers = stunUrls.length ? [{ urls: stunUrls }] : []
   return { stunServers }
