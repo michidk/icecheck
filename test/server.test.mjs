@@ -56,7 +56,7 @@ test('serves the single-page diagnostic UI and ICE configuration', async () => {
 
   assert.deepEqual(health, { ok: true });
   assert.deepEqual(config, { stunServers: [{
-    urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'],
+    urls: ['stun:stun.lohr.dev:3478', 'stun:stun.l.google.com:19302'],
   }] });
   assert.equal(configResponse.headers.get('cache-control'), 'no-store');
   for (const response of [healthResponse, configResponse, faviconResponse, homeResponse]) {
@@ -69,9 +69,9 @@ test('serves the single-page diagnostic UI and ICE configuration', async () => {
   assert.match(faviconResponse.headers.get('content-type'), /image\/svg\+xml/);
   assert.deepEqual(
     buildIceConfiguration({
-      STUN_URLS: 'turn:relay.invalid:3478, stun:main.lohr.dev:3478, stun:stun.l.google.com:19302',
+      STUN_URLS: 'turn:relay.invalid:3478, stun:stun.lohr.dev:3478, stun:stun.l.google.com:19302',
     }),
-    { stunServers: [{ urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }] },
+    { stunServers: [{ urls: ['stun:stun.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }] },
   );
   assert.equal(homeResponse.status, 200);
   assert.match(home, /Find where a peer connection fails/);
