@@ -12,6 +12,11 @@ export const Route = createRootRoute({
       { name: 'color-scheme', content: 'light' },
       { name: 'theme-color', content: '#f6f6f6' },
       { title: 'icecheck' },
+      { property: 'og:image', content: 'https://icecheck.vercel.app/social-preview.png' },
+      { property: 'og:image:width', content: '1280' },
+      { property: 'og:image:height', content: '640' },
+      { property: 'og:image:alt', content: 'icecheck: two-browser WebRTC connectivity and ICE path diagnostics' },
+      { name: 'twitter:card', content: 'summary_large_image' },
     ],
     links: [
       { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
